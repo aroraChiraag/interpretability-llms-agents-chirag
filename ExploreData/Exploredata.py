@@ -11,3 +11,5 @@ df = pd.read_csv(file_path, skiprows=1)
 print(df.head())
 print(df.info())
 print(df.describe())
+
+...
