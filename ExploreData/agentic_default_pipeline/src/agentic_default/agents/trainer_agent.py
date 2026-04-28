@@ -5,10 +5,11 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, List, Optional
 
-from crewai import Agent, Crew, Task
+from crewai import Agent, Task
 
 from ..ml_trainer import SUPPORTED_MODELS
 from ..tools.training_tools import GetMetricsTool, TrainModelsTool
+from ._crew_helpers import build_crew, kickoff_quiet
 from .llm import build_gemini_llm
 
 
@@ -66,5 +67,5 @@ class TrainerAgent:
             expected_output="A JSON object with leaderboard, best_model, and per-model metrics.",
             agent=agent,
         )
-        crew = Crew(agents=[agent], tasks=[task], verbose=False)
-        return crew.kickoff()
+        crew = build_crew(agents=[agent], tasks=[task], verbose=False)
+        return kickoff_quiet(crew)

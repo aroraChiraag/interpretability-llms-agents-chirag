@@ -5,7 +5,13 @@ from __future__ import annotations
 import os
 from typing import Optional
 
-from crewai import LLM
+# Apply non-interactive env defaults BEFORE crewai is imported.
+from .._runtime import apply_non_interactive_defaults
+
+
+apply_non_interactive_defaults()
+
+from crewai import LLM  # noqa: E402  (must follow env-var setup)
 
 
 DEFAULT_MODEL = "gemini-2.5-flash"

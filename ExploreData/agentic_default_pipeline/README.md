@@ -27,12 +27,14 @@ top-10 feature importances (weight-magnitude proxy for the MLP).
 ```
 Explore/agentic_default_pipeline/
 ├── README.md
-├── run_pipeline.py                # CLI entry point
+├── demo.py                        # ⭐ plain Python end-to-end demo (start here)
+├── run_pipeline.py                # CLI entry point (full agentic flow only)
 ├── notebooks/
-│   └── demo.ipynb                 # end-to-end walkthrough
+│   └── demo.ipynb                 # same flow, in Jupyter
 ├── outputs/                       # per-run artifacts land here
 └── src/agentic_default/
     ├── __init__.py
+    ├── _runtime.py                # disables CrewAI's interactive trace prompt
     ├── data_loader.py             # CSV → JSON, train/test split, metadata
     ├── ml_trainer.py              # RF / XGBoost / MLP + metrics
     ├── pipeline.py                # Crew orchestration
@@ -45,6 +47,7 @@ Explore/agentic_default_pipeline/
     │   ├── dataset_tools.py       # LoadDatasetTool, PreviewRecordsTool
     │   └── training_tools.py      # TrainModelsTool, GetMetricsTool
     └── agents/
+        ├── _crew_helpers.py       # Crew constructor with tracing=False
         ├── llm.py                 # Gemini LLM helper
         ├── data_agent.py
         ├── trainer_agent.py
@@ -72,7 +75,31 @@ GEMINI_API_KEY=your_gemini_api_key_here
 
 (The bootcamp organizers will provide the key.)
 
-## Run the full pipeline
+## Run the demo (recommended)
+
+`demo.py` is a plain Python script — **no Jupyter required, no y/N prompts**.
+It runs an offline ML sanity check first (works without the API key) and then
+the full agentic pipeline (skipped automatically if `GEMINI_API_KEY` is unset).
+
+```bash
+cd Explore/agentic_default_pipeline
+uv run --env-file ../../.env python demo.py
+```
+
+Useful flags:
+
+```bash
+# Only the offline ML sanity check — no LLM calls.
+python demo.py --skip-agents
+
+# Only the agentic phase (skip the offline preview).
+python demo.py --skip-offline
+
+# Train a smaller model subset.
+python demo.py --models random_forest neural_network
+```
+
+## Run the full pipeline programmatically
 
 ```bash
 cd Explore/agentic_default_pipeline
@@ -81,13 +108,37 @@ uv run --env-file ../../.env python run_pipeline.py \
     --output-dir outputs/run_$(date +%Y%m%d_%H%M%S)
 ```
 
-This writes the following into the chosen output directory:
+Both `demo.py` and `run_pipeline.py` write the following into the chosen
+output directory:
 
 - `dataset.json` — full dataset as a JSON record list
 - `metadata.json` — dataset metadata (row counts, class balance, etc.)
 - `dataset_summary.json` — what the DataAgent emitted
 - `metrics_report.json` — what the TrainerAgent / training tool emitted
 - `explanation.md` — the ExplainerAgent's Markdown interpretability brief
+
+## A note on CrewAI's trace prompt
+
+CrewAI 1.x can ask "Would you like to view the execution traces? (y/N)" at
+the end of a run, which hangs in non-interactive contexts (Jupyter, CI, log
+pipelines).
+
+**Tracing itself is left ON** — the trace data is still collected (and
+uploaded if you've configured a tracing backend). Only the interactive
+prompt is silenced. Two mechanisms do this:
+
+1. The package sets these env vars on import (using `os.environ.setdefault`,
+   so your values always win):
+   - `CREWAI_NON_INTERACTIVE=true`
+   - `CREWAI_DISABLE_TRACE_PROMPT=true`
+2. Each `crew.kickoff()` call is wrapped in `auto_decline_prompts()`, which
+   monkey-patches `builtins.input` to auto-return `"n"` for the duration of
+   the kickoff. The original prompt is echoed to stderr with an
+   `[auto-declined]` prefix so you can see what was suppressed.
+
+If you actually want the prompt back (e.g. running interactively), import
+`agentic_default.pipeline.run_pipeline` and call your agents directly without
+going through `kickoff_quiet`.
 
 ## Run programmatically
 

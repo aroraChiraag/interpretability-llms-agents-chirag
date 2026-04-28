@@ -6,8 +6,9 @@ import json
 from pathlib import Path
 from typing import Any, Optional
 
-from crewai import Agent, Crew, Task
+from crewai import Agent, Task
 
+from ._crew_helpers import build_crew, kickoff_quiet
 from .llm import build_gemini_llm
 
 
@@ -63,5 +64,5 @@ class ExplainerAgent:
             expected_output="A Markdown interpretability brief.",
             agent=agent,
         )
-        crew = Crew(agents=[agent], tasks=[task], verbose=False)
-        return crew.kickoff()
+        crew = build_crew(agents=[agent], tasks=[task], verbose=False)
+        return kickoff_quiet(crew)
