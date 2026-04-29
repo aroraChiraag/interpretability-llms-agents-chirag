@@ -2,12 +2,15 @@
 
 The ``train_and_evaluate`` function is the main entry point. It accepts the
 arrays from :class:`agentic_default.data_loader.LoadedDataset` plus a list of
-model names and returns a dictionary of metrics for each model. The dictionary
-is what the CrewAI ExplainerAgent will consume.
+model names and returns a dictionary of metrics for each model.
+
+Hyperparameters can be overridden per-model via the ``hyperparameters`` arg
+or via ``default_hyperparameters()`` (used by the UI form / chat tools).
 """
 
 from __future__ import annotations
 
+import copy
 import json
 import time
 from dataclasses import dataclass, field
@@ -33,6 +36,59 @@ from sklearn.neural_network import MLPClassifier
 SUPPORTED_MODELS = ("random_forest", "xgboost", "neural_network")
 
 
+# ---------- defaults --------------------------------------------------------
+
+
+def default_hyperparameters() -> Dict[str, Dict[str, Any]]:
+    """Return a fresh dict of the default hyperparameters per model.
+
+    The UI form populates itself from this; the chat coordinator merges
+    user-requested overrides on top. Returning a deep copy each time avoids
+    accidental shared mutation.
+    """
+    return copy.deepcopy(
+        {
+            "random_forest": {
+                "n_estimators": 300,
+                "max_depth": None,
+                "min_samples_split": 4,
+                "min_samples_leaf": 2,
+                "class_weight": "balanced",
+            },
+            "xgboost": {
+                "n_estimators": 400,
+                "learning_rate": 0.05,
+                "max_depth": 5,
+                "subsample": 0.9,
+                "colsample_bytree": 0.9,
+            },
+            "neural_network": {
+                "hidden_layer_sizes": [64, 32],
+                "alpha": 1e-4,
+                "learning_rate_init": 1e-3,
+                "max_iter": 80,
+                "batch_size": 128,
+            },
+        }
+    )
+
+
+def merge_hyperparameters(
+    overrides: Optional[Dict[str, Dict[str, Any]]],
+) -> Dict[str, Dict[str, Any]]:
+    """Merge user overrides on top of the defaults, producing a full config."""
+    merged = default_hyperparameters()
+    if not overrides:
+        return merged
+    for model_name, params in overrides.items():
+        if model_name not in merged:
+            merged[model_name] = {}
+        if not isinstance(params, dict):
+            continue
+        merged[model_name].update(params)
+    return merged
+
+
 # ---------- result containers -----------------------------------------------
 
 
@@ -46,6 +102,7 @@ class ModelResult:
     confusion_matrix: List[List[int]] = field(default_factory=list)
     train_seconds: float = 0.0
     notes: str = ""
+    hyperparameters: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
         """Return a JSON-friendly dictionary."""
@@ -56,80 +113,68 @@ class ModelResult:
             "confusion_matrix": self.confusion_matrix,
             "train_seconds": round(self.train_seconds, 3),
             "notes": self.notes,
+            "hyperparameters": self.hyperparameters,
         }
 
 
 # ---------- model factories -------------------------------------------------
 
 
-def _build_random_forest(random_state: int = 42) -> RandomForestClassifier:
-    """Construct a Random Forest with sensible defaults for this dataset."""
+def _build_random_forest(random_state: int, params: Dict[str, Any]) -> RandomForestClassifier:
+    """Construct a Random Forest using the supplied hyperparameters."""
     return RandomForestClassifier(
-        n_estimators=300,
-        max_depth=None,
-        min_samples_split=4,
-        min_samples_leaf=2,
-        class_weight="balanced",
         random_state=random_state,
         n_jobs=-1,
+        **params,
     )
 
 
-def _build_xgboost(random_state: int = 42):
-    """Construct an XGBoost classifier; falls back to GradientBoosting if absent.
-
-    Returns
-    -------
-    object
-        A fitted-or-fittable estimator with ``fit`` / ``predict_proba``.
-    str
-        A note describing which library is in use.
-    """
+def _build_xgboost(random_state: int, params: Dict[str, Any]):
+    """Construct an XGBoost classifier; fall back to GradientBoosting if absent."""
     try:
         from xgboost import XGBClassifier  # type: ignore
     except ImportError:
         from sklearn.ensemble import GradientBoostingClassifier
 
+        # GradientBoostingClassifier doesn't support all xgboost params — only
+        # forward the overlap.
+        compatible = {
+            k: v
+            for k, v in params.items()
+            if k in {"n_estimators", "learning_rate", "max_depth"}
+        }
         return (
-            GradientBoostingClassifier(
-                n_estimators=300,
-                learning_rate=0.05,
-                max_depth=3,
-                random_state=random_state,
-            ),
+            GradientBoostingClassifier(random_state=random_state, **compatible),
             "xgboost not installed — using sklearn GradientBoostingClassifier as a substitute",
         )
     return (
         XGBClassifier(
-            n_estimators=400,
-            learning_rate=0.05,
-            max_depth=5,
-            subsample=0.9,
-            colsample_bytree=0.9,
             objective="binary:logistic",
             eval_metric="logloss",
             random_state=random_state,
             n_jobs=-1,
             tree_method="hist",
+            **params,
         ),
         "xgboost.XGBClassifier",
     )
 
 
-def _build_neural_network(random_state: int = 42) -> MLPClassifier:
-    """Construct a small MLP suitable for tabular binary classification."""
+def _build_neural_network(random_state: int, params: Dict[str, Any]) -> MLPClassifier:
+    """Construct an MLP using the supplied hyperparameters."""
+    # hidden_layer_sizes can come in as a list (JSON-friendly) — sklearn
+    # accepts a tuple or a list, but normalise for cleanliness.
+    if "hidden_layer_sizes" in params and isinstance(params["hidden_layer_sizes"], list):
+        params = dict(params)
+        params["hidden_layer_sizes"] = tuple(params["hidden_layer_sizes"])
     return MLPClassifier(
-        hidden_layer_sizes=(64, 32),
         activation="relu",
         solver="adam",
-        alpha=1e-4,
-        batch_size=128,
-        learning_rate_init=1e-3,
-        max_iter=80,
         early_stopping=True,
         validation_fraction=0.1,
         random_state=random_state,
         verbose=False,
+        **params,
     )
 
 
@@ -189,15 +234,16 @@ def _train_one(
     y_test: np.ndarray,
     feature_names: Sequence[str],
     random_state: int,
+    params: Dict[str, Any],
 ) -> ModelResult:
     """Fit one model, evaluate on the test split, return a ModelResult."""
     note = ""
     if model_name == "random_forest":
-        model = _build_random_forest(random_state)
+        model = _build_random_forest(random_state, params)
     elif model_name == "xgboost":
-        model, note = _build_xgboost(random_state)
+        model, note = _build_xgboost(random_state, params)
     elif model_name == "neural_network":
-        model = _build_neural_network(random_state)
+        model = _build_neural_network(random_state, params)
     else:
         raise ValueError(
             f"Unknown model {model_name!r}. Choose from {SUPPORTED_MODELS}."
@@ -223,7 +269,6 @@ def _train_one(
             np.asarray(model.feature_importances_), feature_names
         )
     elif hasattr(model, "coefs_"):
-        # MLP: use first-layer absolute weight magnitude as a rough proxy.
         first_layer = np.abs(model.coefs_[0]).sum(axis=1)
         importance = _feature_importance_records(first_layer, feature_names)
         note = (note + "; " if note else "") + (
@@ -239,6 +284,7 @@ def _train_one(
         confusion_matrix=cm,
         train_seconds=float(train_seconds),
         notes=note,
+        hyperparameters=params,
     )
 
 
@@ -254,6 +300,7 @@ def train_and_evaluate(
     models: Sequence[str] = SUPPORTED_MODELS,
     random_state: int = 42,
     output_dir: Optional[Path] = None,
+    hyperparameters: Optional[Dict[str, Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     """Train and evaluate one or more classifiers.
 
@@ -262,20 +309,28 @@ def train_and_evaluate(
     x_train, y_train, x_test, y_test : np.ndarray
         Train and test arrays.
     feature_names : sequence of str
-        Names of the feature columns, used for importance reporting.
+        Names of the feature columns.
     models : sequence of str, default all supported
         Subset of ``SUPPORTED_MODELS`` to train.
     random_state : int, default 42
         Seed.
     output_dir : Path, optional
         If provided, the metric report is written to ``<dir>/metrics_report.json``.
+    hyperparameters : dict, optional
+        Per-model overrides (merged on top of :func:`default_hyperparameters`).
+        Example::
+
+            {"random_forest": {"n_estimators": 500, "max_depth": 12}}
 
     Returns
     -------
     dict
         Mapping with keys ``models`` (list of per-model dicts), ``leaderboard``
-        (sorted by ROC-AUC descending), and ``best_model``.
+        (sorted by ROC-AUC descending), ``best_model``, and
+        ``hyperparameters_used``.
     """
+    full_params = merge_hyperparameters(hyperparameters)
+
     results: List[ModelResult] = []
     for model_name in models:
         result = _train_one(
@@ -286,6 +341,7 @@ def train_and_evaluate(
             y_test=y_test,
             feature_names=feature_names,
             random_state=random_state,
+            params=full_params.get(model_name, {}),
         )
         results.append(result)
 
@@ -310,6 +366,7 @@ def train_and_evaluate(
             for r in leaderboard
         ],
         "best_model": best_model,
+        "hyperparameters_used": full_params,
     }
 
     if output_dir is not None:

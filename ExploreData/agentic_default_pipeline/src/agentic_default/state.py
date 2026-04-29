@@ -1,9 +1,8 @@
 """Shared in-memory pipeline state.
 
-Because CrewAI tools have to take JSON-friendly inputs/outputs but our ML
-arrays are large numpy objects, we keep arrays in a process-local store and
-only pass small string handles between agents. This avoids serializing tens
-of thousands of rows into the LLM prompt.
+Numpy arrays and per-run results live in process-local storage so they don't
+have to be serialised through LLM prompts. The Streamlit app and the chat
+coordinator both read/write this state.
 """
 
 from __future__ import annotations
@@ -13,6 +12,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
 
 from .data_loader import LoadedDataset
+from .ml_trainer import default_hyperparameters
 
 
 @dataclass
@@ -22,6 +22,7 @@ class PipelineState:
     dataset: Optional[LoadedDataset] = None
     metrics_report: Dict[str, Any] = field(default_factory=dict)
     explanation: str = ""
+    hyperparameters: Dict[str, Dict[str, Any]] = field(default_factory=default_hyperparameters)
 
 
 _STATE_LOCK = threading.Lock()

@@ -27,31 +27,36 @@ top-10 feature importances (weight-magnitude proxy for the MLP).
 ```
 Explore/agentic_default_pipeline/
 ├── README.md
-├── demo.py                        # ⭐ plain Python end-to-end demo (start here)
+├── app.py                         # Streamlit web UI (start here)
+├── demo.py                        # plain Python end-to-end demo
 ├── run_pipeline.py                # CLI entry point (full agentic flow only)
+├── TEAM_BRIEF.md                  # onboarding doc for non-technical teammates
 ├── notebooks/
 │   └── demo.ipynb                 # same flow, in Jupyter
 ├── outputs/                       # per-run artifacts land here
 └── src/agentic_default/
     ├── __init__.py
-    ├── _runtime.py                # disables CrewAI's interactive trace prompt
+    ├── _runtime.py                # auto-declines CrewAI's trace y/N prompt
     ├── data_loader.py             # CSV → JSON, train/test split, metadata
-    ├── ml_trainer.py              # RF / XGBoost / MLP + metrics
+    ├── ml_trainer.py              # RF / XGBoost / MLP + metrics + hp defaults
     ├── pipeline.py                # Crew orchestration
-    ├── state.py                   # in-memory pipeline state
+    ├── state.py                   # in-memory pipeline state (incl. hp dict)
     ├── prompts/
     │   ├── data_agent.txt
     │   ├── trainer_agent.txt
-    │   └── explainer_agent.txt
+    │   ├── explainer_agent.txt
+    │   └── coordinator_agent.txt  # chat / tuning prompt
     ├── tools/
     │   ├── dataset_tools.py       # LoadDatasetTool, PreviewRecordsTool
-    │   └── training_tools.py      # TrainModelsTool, GetMetricsTool
+    │   └── training_tools.py      # TrainModelsTool, GetMetricsTool,
+    │                              # Update/Get/ResetHyperparametersTool
     └── agents/
-        ├── _crew_helpers.py       # Crew constructor with tracing=False
+        ├── _crew_helpers.py       # build_crew + kickoff_quiet
         ├── llm.py                 # Gemini LLM helper
         ├── data_agent.py
         ├── trainer_agent.py
-        └── explainer_agent.py
+        ├── explainer_agent.py
+        └── coordinator_agent.py   # chat-driven pipeline coordinator
 ```
 
 ## Setup
@@ -74,6 +79,39 @@ GEMINI_API_KEY=your_gemini_api_key_here
 ```
 
 (The bootcamp organizers will provide the key.)
+
+## Run the Streamlit web app (recommended)
+
+A browser UI with per-model "Run" buttons, a sidebar hyperparameter form, a
+chat tab for natural-language tuning, and a dedicated tab that renders the
+explainer's Markdown brief.
+
+```bash
+cd Explore/agentic_default_pipeline
+uv run --env-file ../../.env streamlit run app.py
+```
+
+Streamlit prints a local URL (usually <http://localhost:8501>); open it in
+your browser. What each tab does:
+
+- **Run** — load the dataset, train each model individually (RF, XGBoost,
+  Neural Network) or all together with the "Run all + explain" button.
+  Shows the leaderboard, per-model metrics, confusion matrices, top
+  feature importances, and the hyperparameters that were actually used.
+- **Chat** — talk to the Pipeline Coordinator agent in plain English.
+  Examples: *"Use 500 trees in random forest and re-run"*, *"Drop the
+  XGBoost learning rate to 0.01"*, *"Which model has the best recall?"*,
+  *"Reset hyperparameters"*. The coordinator uses tools to update
+  pipeline state and retrains as needed; numbers it cites are pulled
+  verbatim from the metrics report (it cannot fabricate values).
+- **Explanation** — the explainer agent's full Markdown brief, rendered
+  big and clean. Download button included.
+- **Artifacts** — file links for the JSON / Markdown saved to
+  `outputs/streamlit_run/`.
+
+The sidebar has a hyperparameter form with expanders per model. The form
+and the chat both read/write the same in-memory state, so a tweak in
+either place is reflected in the other.
 
 ## Run the demo (recommended)
 
