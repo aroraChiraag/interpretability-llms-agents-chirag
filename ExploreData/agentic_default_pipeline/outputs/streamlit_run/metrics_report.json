@@ -1,0 +1,151 @@
+{
+  "models": [
+    {
+      "model_name": "random_forest",
+      "metrics": {
+        "accuracy": 0.8086666666666666,
+        "balanced_accuracy": 0.671045533908578,
+        "precision": 0.5945089757127772,
+        "recall": 0.4242652599849284,
+        "f1": 0.4951627088830255,
+        "roc_auc": 0.7658704439926587,
+        "average_precision": 0.5441871803260725,
+        "classification_report": {
+          "0": {
+            "precision": 0.8488026914704137,
+            "recall": 0.9178258078322277,
+            "f1-score": 0.8819658646925767,
+            "support": 4673.0
+          },
+          "1": {
+            "precision": 0.5945089757127772,
+            "recall": 0.4242652599849284,
+            "f1-score": 0.4951627088830255,
+            "support": 1327.0
+          },
+          "accuracy": 0.8086666666666666,
+          "macro avg": {
+            "precision": 0.7216558335915955,
+            "recall": 0.671045533908578,
+            "f1-score": 0.688564286787801,
+            "support": 6000.0
+          },
+          "weighted avg": {
+            "precision": 0.7925613980020163,
+            "recall": 0.8086666666666666,
+            "f1-score": 0.7964179000660309,
+            "support": 6000.0
+          }
+        }
+      },
+      "feature_importance": [
+        {
+          "feature": "PAY_0",
+          "importance": 0.10959595205778246,
+          "rank": 1
+        },
+        {
+          "feature": "BILL_AMT1",
+          "importance": 0.06096650774387379,
+          "rank": 2
+        },
+        {
+          "feature": "LIMIT_BAL",
+          "importance": 0.058700657671416204,
+          "rank": 3
+        },
+        {
+          "feature": "PAY_AMT1",
+          "importance": 0.0543241775084194,
+          "rank": 4
+        },
+        {
+          "feature": "AGE",
+          "importance": 0.05313781094186449,
+          "rank": 5
+        },
+        {
+          "feature": "BILL_AMT2",
+          "importance": 0.05307597969691429,
+          "rank": 6
+        },
+        {
+          "feature": "PAY_AMT2",
+          "importance": 0.05208795918709967,
+          "rank": 7
+        },
+        {
+          "feature": "BILL_AMT3",
+          "importance": 0.0498651000150069,
+          "rank": 8
+        },
+        {
+          "feature": "BILL_AMT4",
+          "importance": 0.049772564728156936,
+          "rank": 9
+        },
+        {
+          "feature": "PAY_AMT3",
+          "importance": 0.04894946299781215,
+          "rank": 10
+        }
+      ],
+      "confusion_matrix": [
+        [
+          4289,
+          384
+        ],
+        [
+          764,
+          563
+        ]
+      ],
+      "train_seconds": 4.351,
+      "notes": "",
+      "hyperparameters": {
+        "n_estimators": 300,
+        "max_depth": null,
+        "min_samples_split": 4,
+        "min_samples_leaf": 2,
+        "class_weight": "balanced"
+      }
+    }
+  ],
+  "leaderboard": [
+    {
+      "model_name": "random_forest",
+      "roc_auc": 0.7658704439926587,
+      "f1": 0.4951627088830255,
+      "precision": 0.5945089757127772,
+      "recall": 0.4242652599849284,
+      "accuracy": 0.8086666666666666
+    }
+  ],
+  "best_model": "random_forest",
+  "hyperparameters_used": {
+    "random_forest": {
+      "n_estimators": 300,
+      "max_depth": null,
+      "min_samples_split": 4,
+      "min_samples_leaf": 2,
+      "class_weight": "balanced"
+    },
+    "xgboost": {
+      "n_estimators": 400,
+      "learning_rate": 0.05,
+      "max_depth": 5,
+      "subsample": 0.9,
+      "colsample_bytree": 0.9
+    },
+    "neural_network": {
+      "hidden_layer_sizes": [
+        64,
+        32
+      ],
+      "alpha": 0.0001,
+      "learning_rate_init": 0.001,
+      "max_iter": 80,
+      "batch_size": 128
+    }
+  }
+}

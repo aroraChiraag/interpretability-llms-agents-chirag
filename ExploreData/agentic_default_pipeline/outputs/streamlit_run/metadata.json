@@ -1,0 +1,56 @@
+[
+  {
+    "n_rows": 30000,
+    "n_features": 23,
+    "feature_names": [
+      "LIMIT_BAL",
+      "SEX",
+      "EDUCATION",
+      "MARRIAGE",
+      "AGE",
+      "PAY_0",
+      "PAY_2",
+      "PAY_3",
+      "PAY_4",
+      "PAY_5",
+      "PAY_6",
+      "BILL_AMT1",
+      "BILL_AMT2",
+      "BILL_AMT3",
+      "BILL_AMT4",
+      "BILL_AMT5",
+      "BILL_AMT6",
+      "PAY_AMT1",
+      "PAY_AMT2",
+      "PAY_AMT3",
+      "PAY_AMT4",
+      "PAY_AMT5",
+      "PAY_AMT6"
+    ],
+    "target_name": "default payment next month",
+    "class_balance": {
+      "0": 23364,
+      "1": 6636
+    },
+    "train_size": 24000,
+    "test_size": 6000,
+    "csv_path": "/home/coder/interpretability-llms-agents/ExploreData/default_of_credit_card_clients.csv",
+    "extras": {
+      "categorical_columns": [
+        "SEX",
+        "EDUCATION",
+        "MARRIAGE"
+      ],
+      "pay_columns": [
+        "PAY_0",
+        "PAY_2",
+        "PAY_3",
+        "PAY_4",
+        "PAY_5",
+        "PAY_6"
+      ],
+      "scaled": true,
+      "random_state": 42
+    }
+  }
+]

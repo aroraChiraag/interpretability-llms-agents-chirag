@@ -66,9 +66,9 @@ BACKEND_CONFIGS: dict = {
     },
     "gemini_gemini": {
         "planner_backend": "gemini",
-        "planner_model": "gemini-2.5-flash-lite",
+        "planner_model": "gemini-2.5-flash",
         "vision_backend": "gemini",
-        "vision_model": "gemini-2.5-flash-lite",
+        "vision_model": "gemini-2.5-flash",
         "judge_backend": "gemini",
     },
     "openai_gemini": {
