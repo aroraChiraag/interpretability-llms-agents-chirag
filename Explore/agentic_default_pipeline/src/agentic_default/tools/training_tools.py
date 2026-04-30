@@ -116,6 +116,9 @@ def _compact_report(report: Dict[str, Any]) -> Dict[str, Any]:
                 "train_seconds": m["train_seconds"],
                 "notes": m["notes"],
                 "hyperparameters": m.get("hyperparameters", {}),
+                # `predictions` is intentionally omitted — it's too large for
+                # an LLM context and is only consumed by the fairness
+                # pipeline, which reads from PipelineState directly.
             }
             for m in report["models"]
         ],
@@ -235,7 +238,6 @@ class ResetHyperparametersTool(BaseTool):
         "the user asks to 'go back to defaults' or 'reset hyperparameters'."
     )
     args_schema: Type[BaseModel] = ResetHyperparametersInput
-
     def _run(self, state_handle: str = "default") -> str:
         state = get_state(state_handle)
         state.hyperparameters = default_hyperparameters()

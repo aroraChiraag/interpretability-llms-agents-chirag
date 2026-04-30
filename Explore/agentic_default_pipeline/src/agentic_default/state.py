@@ -23,6 +23,8 @@ class PipelineState:
     metrics_report: Dict[str, Any] = field(default_factory=dict)
     explanation: str = ""
     hyperparameters: Dict[str, Dict[str, Any]] = field(default_factory=default_hyperparameters)
+    fairness_metrics: Dict[str, Any] = field(default_factory=dict)
+    fairness_explanation: str = ""
 
 
 _STATE_LOCK = threading.Lock()

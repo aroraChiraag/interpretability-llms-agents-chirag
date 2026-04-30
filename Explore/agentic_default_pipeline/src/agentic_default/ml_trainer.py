@@ -103,6 +103,9 @@ class ModelResult:
     train_seconds: float = 0.0
     notes: str = ""
     hyperparameters: Dict[str, Any] = field(default_factory=dict)
+    #: Test-set predicted labels (0/1), aligned with x_test/y_test ordering.
+    #: Used by the fairness pipeline; trimmed out of LLM-facing payloads.
+    predictions: List[int] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
         """Return a JSON-friendly dictionary."""
@@ -114,6 +117,7 @@ class ModelResult:
             "train_seconds": round(self.train_seconds, 3),
             "notes": self.notes,
             "hyperparameters": self.hyperparameters,
+            "predictions": self.predictions,
         }
 
 
@@ -285,6 +289,7 @@ def _train_one(
         train_seconds=float(train_seconds),
         notes=note,
         hyperparameters=params,
+        predictions=[int(v) for v in y_pred],
     )
 
 

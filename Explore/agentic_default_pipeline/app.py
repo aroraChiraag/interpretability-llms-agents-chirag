@@ -50,6 +50,9 @@ except Exception:
 import agentic_default  # noqa: F401, E402
 
 from agentic_default.data_loader import load_dataset  # noqa: E402
+from agentic_default.fairness_metrics import (  # noqa: E402
+    compute_fairness_for_all_models,
+)
 from agentic_default.ml_trainer import (  # noqa: E402
     SUPPORTED_MODELS,
     default_hyperparameters,
@@ -68,10 +71,12 @@ def _ensure_agents_imported():
     from agentic_default.agents import (  # noqa: F401
         CoordinatorAgent,
         ExplainerAgent,
+        FairnessAgent,
     )
 
     st.session_state["_CoordinatorAgent"] = CoordinatorAgent
     st.session_state["_ExplainerAgent"] = ExplainerAgent
+    st.session_state["_FairnessAgent"] = FairnessAgent
     _agents_imported = True
 
 
@@ -95,6 +100,8 @@ def _init_state() -> None:
         "random_state": 42,
         "messages": [],
         "explanation_md": "",
+        "fairness_metrics": {},
+        "fairness_md": "",
         "metrics_report": {},
         "dataset_summary": {},
         "outputs_dir": str(THIS_DIR / "outputs" / "streamlit_run"),
@@ -211,6 +218,97 @@ def _run_explainer() -> None:
         out_path = Path(st.session_state["outputs_dir"])
         out_path.mkdir(parents=True, exist_ok=True)
         (out_path / "explanation.md").write_text(text, encoding="utf-8")
+
+
+def _compute_fairness() -> None:
+    """Compute fairness metrics from in-state predictions; persist to state."""
+    state = get_state(st.session_state["state_handle"])
+    if state.dataset is None or not state.metrics_report:
+        st.error("Train at least one model first — fairness needs predictions.")
+        return
+    has_preds = any(m.get("predictions") for m in state.metrics_report.get("models", []))
+    if not has_preds:
+        st.error(
+            "The current metrics_report has no per-row predictions stored. "
+            "Re-train models so predictions are captured."
+        )
+        return
+    fairness = compute_fairness_for_all_models(
+        metrics_report=state.metrics_report,
+        y_true=state.dataset.y_test,
+        sensitive_df=state.dataset.test_sensitive,
+    )
+    state.fairness_metrics = fairness
+    st.session_state["fairness_metrics"] = fairness
+
+    out_path = Path(st.session_state["outputs_dir"])
+    out_path.mkdir(parents=True, exist_ok=True)
+    (out_path / "fairness_metrics.json").write_text(
+        json.dumps(fairness, indent=2), encoding="utf-8"
+    )
+
+
+def _run_fairness_agent() -> None:
+    """Invoke the FairnessAgent on the latest fairness_metrics."""
+    _ensure_agents_imported()
+    if not _gemini_key_present():
+        st.error("GEMINI_API_KEY is not set. Add it to .env or export it.")
+        return
+    state = get_state(st.session_state["state_handle"])
+    if not state.fairness_metrics:
+        _compute_fairness()
+        if not state.fairness_metrics:
+            return  # _compute_fairness already surfaced an error
+
+    fairness_cls = st.session_state["_FairnessAgent"]
+    with st.spinner("FairnessAgent is auditing the models..."):
+        # Strip per-row predictions from the performance payload — the agent
+        # doesn't need them and they bloat the prompt.
+        perf_for_agent = {
+            "leaderboard": st.session_state["metrics_report"].get("leaderboard", []),
+            "best_model": st.session_state["metrics_report"].get("best_model"),
+            "models": [
+                {k: v for k, v in m.items() if k != "predictions"}
+                for m in st.session_state["metrics_report"].get("models", [])
+            ],
+        }
+        agent = fairness_cls()
+        result = agent.run(
+            metrics_report=perf_for_agent,
+            fairness_metrics=state.fairness_metrics,
+        )
+        text = getattr(result, "raw", None) or str(result)
+        state.fairness_explanation = text
+        st.session_state["fairness_md"] = text
+
+        out_path = Path(st.session_state["outputs_dir"])
+        out_path.mkdir(parents=True, exist_ok=True)
+        (out_path / "fairness_audit.md").write_text(text, encoding="utf-8")
+
+
+def _run_fairness_audit() -> None:
+    """Compute fairness metrics, then call the FairnessAgent — one click."""
+    _compute_fairness()
+    if get_state(st.session_state["state_handle"]).fairness_metrics:
+        _run_fairness_agent()
+
+
+def _fairness_summary_rows() -> list:
+    """Flatten fairness_metrics into a per-(model, attribute) DataFrame row."""
+    fm = st.session_state.get("fairness_metrics") or {}
+    rows = []
+    for model_name, attrs in (fm.get("per_model") or {}).items():
+        for attr_name, payload in attrs.items():
+            eo = payload.get("equalized_odds") or {}
+            rows.append({
+                "model": model_name,
+                "attribute": attr_name,
+                "disparate_impact": payload.get("disparate_impact"),
+                "passes_80_pct_rule": payload.get("passes_80_pct_rule"),
+                "tpr_gap": eo.get("tpr_gap"),
+                "fpr_gap": eo.get("fpr_gap"),
+            })
+    return rows
 
 
 def _format_metric_row(model_dict: Dict[str, Any]) -> Dict[str, Any]:
@@ -344,8 +442,8 @@ st.caption(
     "(Random Forest, XGBoost, Neural Network) powered by Gemini."
 )
 
-tab_run, tab_chat, tab_explain, tab_artifacts = st.tabs(
-    ["Run", "Chat", "Explanation", "Artifacts"]
+tab_run, tab_chat, tab_explain, tab_fairness, tab_artifacts = st.tabs(
+    ["Run", "Chat", "Explanation", "Fairness", "Artifacts"]
 )
 
 
@@ -434,8 +532,13 @@ with tab_run:
                     st.write("Hyperparameters used:")
                     st.json(m["hyperparameters"])
 
-        if st.button("Generate / refresh explanation"):
-            _run_explainer()
+        action_cols = st.columns(2)
+        with action_cols[0]:
+            if st.button("Generate / refresh explanation"):
+                _run_explainer()
+        with action_cols[1]:
+            if st.button("Run Fairness Audit"):
+                _run_fairness_audit()
 
 
 # ---------- Chat tab --------------------------------------------------------
@@ -480,8 +583,6 @@ with tab_chat:
                 {"role": "assistant", "content": reply}
             )
 
-            # The coordinator may have updated state — pull the latest into
-            # the session so the Run tab and forms reflect it.
             state = get_state(st.session_state["state_handle"])
             if state.metrics_report:
                 st.session_state["metrics_report"] = state.metrics_report
@@ -505,6 +606,101 @@ with tab_explain:
             "Download explanation.md",
             data=md,
             file_name="explanation.md",
+            mime="text/markdown",
+        )
+
+
+# ---------- Fairness tab ----------------------------------------------------
+
+with tab_fairness:
+    st.subheader("Fairness audit")
+    st.caption(
+        "Buckets test-set predictions by SEX, AGE band, and MARRIAGE; "
+        "computes Disparate Impact, Equalized-Odds gaps, and FPR gap "
+        "(Predictive Equality) per model. Then the FairnessAgent writes a "
+        "Markdown audit comparing Random Forest, XGBoost, and the Neural Network."
+    )
+
+    fairness_cols = st.columns(3)
+    with fairness_cols[0]:
+        if st.button("Compute fairness metrics", key="fair_btn_compute"):
+            _compute_fairness()
+    with fairness_cols[1]:
+        if st.button("Run FairnessAgent (audit)", key="fair_btn_agent"):
+            _run_fairness_agent()
+    with fairness_cols[2]:
+        if st.button("Compute + audit", type="primary", key="fair_btn_both"):
+            _run_fairness_audit()
+
+    st.markdown("---")
+
+    rows = _fairness_summary_rows()
+    if not rows:
+        st.info(
+            "No fairness metrics yet. Train at least one model on the **Run** "
+            "tab, then click *Compute + audit* above."
+        )
+    else:
+        st.markdown("### Per-model x per-attribute summary")
+        summary_df = pd.DataFrame(rows)
+        st.dataframe(summary_df, use_container_width=True, hide_index=True)
+        st.caption(
+            "Disparate Impact ≥ 0.80 satisfies the four-fifths rule. "
+            "Smaller `tpr_gap` and `fpr_gap` indicate more equalised odds."
+        )
+
+        fm = st.session_state["fairness_metrics"]
+        per_model = fm.get("per_model") or {}
+        per_attr_summary = fm.get("summary") or {}
+
+        if per_attr_summary:
+            st.markdown("### Headline by attribute")
+            head_rows = []
+            for attr, payload in per_attr_summary.items():
+                best_di = payload.get("best_disparate_impact") or (None, None)
+                worst_di = payload.get("worst_disparate_impact") or (None, None)
+                best_fpr = payload.get("best_fpr_gap") or (None, None)
+                worst_fpr = payload.get("worst_fpr_gap") or (None, None)
+                head_rows.append({
+                    "attribute": attr,
+                    "best_DI_model": best_di[0],
+                    "best_DI_value": best_di[1],
+                    "worst_DI_model": worst_di[0],
+                    "worst_DI_value": worst_di[1],
+                    "best_FPR_gap_model": best_fpr[0],
+                    "best_FPR_gap_value": best_fpr[1],
+                })
+            st.dataframe(pd.DataFrame(head_rows), use_container_width=True, hide_index=True)
+
+        st.markdown("### Per-group breakdown")
+        for model_name, attrs in per_model.items():
+            with st.expander(f"{model_name}", expanded=False):
+                for attr_name, payload in attrs.items():
+                    st.markdown(f"**{attr_name}**")
+                    groups = payload.get("groups") or {}
+                    if groups:
+                        gdf = pd.DataFrame(groups).T
+                        st.dataframe(gdf, use_container_width=True)
+                    di = payload.get("disparate_impact")
+                    passes = payload.get("passes_80_pct_rule")
+                    eo = payload.get("equalized_odds") or {}
+                    st.write(
+                        f"Disparate Impact: **{di}** "
+                        f"({'PASSES' if passes else 'FAILS'} 80% rule) · "
+                        f"TPR gap: {eo.get('tpr_gap')} · FPR gap: {eo.get('fpr_gap')}"
+                    )
+
+    st.markdown("---")
+    st.markdown("### FairnessAgent audit")
+    fmd = st.session_state["fairness_md"]
+    if not fmd:
+        st.info("Click *Compute + audit* (or *Run FairnessAgent*) to generate the Markdown audit.")
+    else:
+        st.markdown(fmd)
+        st.download_button(
+            "Download fairness_audit.md",
+            data=fmd,
+            file_name="fairness_audit.md",
             mime="text/markdown",
         )
 
@@ -540,3 +736,8 @@ with tab_artifacts:
         st.markdown("---")
         st.subheader("Latest metrics_report.json (in memory)")
         st.json(st.session_state["metrics_report"])
+
+    if st.session_state.get("fairness_metrics"):
+        st.markdown("---")
+        st.subheader("Latest fairness_metrics.json (in memory)")
+        st.json(st.session_state["fairness_metrics"])

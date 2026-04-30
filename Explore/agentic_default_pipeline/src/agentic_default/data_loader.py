@@ -3,6 +3,11 @@
 This module loads the source CSV, converts it to JSON-friendly Python
 structures, performs a deterministic train/test split, and provides metadata
 that downstream agents can describe in natural language.
+
+It also keeps the **unscaled, original** values of the sensitive demographic
+columns for the test split. The fairness pipeline reads from those — the
+scaled feature matrix is no good for grouping rows back into demographic
+buckets like "male" / "female" or "married" / "single".
 """
 
 from __future__ import annotations
@@ -34,33 +39,16 @@ CATEGORICAL_COLUMNS = ["SEX", "EDUCATION", "MARRIAGE"]
 #: PAY_* columns are repayment-status codes (categorical-ish but ordinal).
 PAY_COLUMNS = ["PAY_0", "PAY_2", "PAY_3", "PAY_4", "PAY_5", "PAY_6"]
 
+#: Sensitive columns the fairness pipeline buckets predictions over.
+SENSITIVE_COLUMNS = ["SEX", "AGE", "MARRIAGE"]
+
 
 # ---------- data containers -------------------------------------------------
 
 
 @dataclass
 class DatasetMetadata:
-    """Lightweight summary of the loaded dataset.
-
-    Attributes
-    ----------
-    n_rows : int
-        Total number of rows in the source CSV.
-    n_features : int
-        Number of feature columns (excluding ID and target).
-    feature_names : list of str
-        Names of the feature columns, in column order.
-    target_name : str
-        Name of the binary target column.
-    class_balance : dict
-        Mapping of class label (str) to count.
-    train_size : int
-        Number of rows in the training split.
-    test_size : int
-        Number of rows in the test split.
-    csv_path : str
-        Absolute path to the source CSV.
-    """
+    """Lightweight summary of the loaded dataset."""
 
     n_rows: int
     n_features: int
@@ -88,6 +76,9 @@ class LoadedDataset:
     feature_names: List[str]
     metadata: DatasetMetadata
     records_json: List[Dict[str, Any]]
+    #: Original, unscaled values of SENSITIVE_COLUMNS for the test rows,
+    #: aligned with x_test/y_test ordering. Used by the fairness pipeline.
+    test_sensitive: pd.DataFrame = field(default_factory=pd.DataFrame)
 
 
 # ---------- public API ------------------------------------------------------
@@ -97,21 +88,7 @@ def csv_to_json_records(
     csv_path: Optional[Path] = None,
     sample: Optional[int] = None,
 ) -> List[Dict[str, Any]]:
-    """Load the credit-card-default CSV as a list of JSON records.
-
-    Parameters
-    ----------
-    csv_path : Path, optional
-        Path to the CSV. Defaults to ``DEFAULT_CSV_PATH``.
-    sample : int, optional
-        If given, return only the first ``sample`` records. Useful for
-        previewing the dataset when an LLM is asked to inspect it.
-
-    Returns
-    -------
-    list of dict
-        Each dictionary corresponds to one row of the CSV.
-    """
+    """Load the credit-card-default CSV as a list of JSON records."""
     csv_path = Path(csv_path) if csv_path else DEFAULT_CSV_PATH
     df = pd.read_csv(csv_path, encoding="utf-8-sig")
     df.columns = [c.strip() for c in df.columns]
@@ -124,20 +101,7 @@ def write_json_snapshot(
     records: List[Dict[str, Any]],
     output_path: Path,
 ) -> Path:
-    """Persist a list of records as a UTF-8 JSON file.
-
-    Parameters
-    ----------
-    records : list of dict
-        Records to serialize.
-    output_path : Path
-        Where to write the JSON.
-
-    Returns
-    -------
-    Path
-        The path that was written.
-    """
+    """Persist a list of records as a UTF-8 JSON file."""
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(records, indent=2), encoding="utf-8")
@@ -151,48 +115,27 @@ def load_dataset(
     scale_features: bool = True,
     snapshot_dir: Optional[Path] = None,
 ) -> LoadedDataset:
-    """Load the dataset and produce a clean train/test split.
-
-    Parameters
-    ----------
-    csv_path : Path, optional
-        Path to the CSV. Defaults to the bundled file in ``Explore/``.
-    test_size : float, default 0.2
-        Fraction of rows reserved for the test split.
-    random_state : int, default 42
-        Seed for reproducibility.
-    scale_features : bool, default True
-        If True, fit a ``StandardScaler`` on the train split and apply to both
-        splits. Tree models ignore scale; the MLP definitely does not.
-    snapshot_dir : Path, optional
-        If provided, the full dataset is also written to ``<dir>/dataset.json``
-        and the metadata to ``<dir>/metadata.json``.
-
-    Returns
-    -------
-    LoadedDataset
-        Container with arrays, metadata, and the JSON record list.
-    """
+    """Load the dataset and produce a clean train/test split."""
     csv_path = Path(csv_path) if csv_path else DEFAULT_CSV_PATH
     df = pd.read_csv(csv_path, encoding="utf-8-sig")
     df.columns = [c.strip() for c in df.columns]
 
-    # Drop the ID column — it is not a feature.
     if "ID" in df.columns:
         df = df.drop(columns=["ID"])
 
     if TARGET_COLUMN not in df.columns:
-        raise KeyError(
-            f"Target column {TARGET_COLUMN!r} missing from CSV {csv_path}."
-        )
+        raise KeyError(f"Target column {TARGET_COLUMN!r} missing from CSV {csv_path}.")
 
     y = df[TARGET_COLUMN].astype(int).to_numpy()
     x_df = df.drop(columns=[TARGET_COLUMN])
     feature_names = list(x_df.columns)
     x = x_df.to_numpy(dtype=float)
 
-    x_train, x_test, y_train, y_test = train_test_split(
-        x, y, test_size=test_size, random_state=random_state, stratify=y
+    # We need the indices so we can carry the original sensitive columns
+    # through to the test split.
+    indices = np.arange(len(x))
+    x_train, x_test, y_train, y_test, idx_train, idx_test = train_test_split(
+        x, y, indices, test_size=test_size, random_state=random_state, stratify=y
     )
 
     if scale_features:
@@ -200,7 +143,14 @@ def load_dataset(
         x_train = scaler.fit_transform(x_train)
         x_test = scaler.transform(x_test)
 
-    class_counts = {str(int(k)): int(v) for k, v in zip(*np.unique(y, return_counts=True))}
+    # Build the test-side sensitive-attribute frame from the *unscaled* values.
+    sensitive_present = [c for c in SENSITIVE_COLUMNS if c in x_df.columns]
+    test_sensitive = x_df.iloc[idx_test][sensitive_present].reset_index(drop=True)
+
+    class_counts = {
+        str(int(k)): int(v)
+        for k, v in zip(*np.unique(y, return_counts=True))
+    }
 
     metadata = DatasetMetadata(
         n_rows=int(len(df)),
@@ -214,6 +164,7 @@ def load_dataset(
         extras={
             "categorical_columns": CATEGORICAL_COLUMNS,
             "pay_columns": PAY_COLUMNS,
+            "sensitive_columns": sensitive_present,
             "scaled": bool(scale_features),
             "random_state": random_state,
         },
@@ -235,24 +186,12 @@ def load_dataset(
         feature_names=feature_names,
         metadata=metadata,
         records_json=records_json,
+        test_sensitive=test_sensitive,
     )
 
 
 def summarize_for_agent(metadata: DatasetMetadata, preview: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """Build a compact JSON-friendly description for an agent prompt.
-
-    Parameters
-    ----------
-    metadata : DatasetMetadata
-        Output of :func:`load_dataset`.
-    preview : list of dict
-        A short list of example records (e.g., the first 3 rows).
-
-    Returns
-    -------
-    dict
-        Lightweight structure ready to be embedded inside a prompt.
-    """
+    """Build a compact JSON-friendly description for an agent prompt."""
     return {
         "summary": {
             "rows": metadata.n_rows,
@@ -265,9 +204,6 @@ def summarize_for_agent(metadata: DatasetMetadata, preview: List[Dict[str, Any]]
         "feature_names": metadata.feature_names,
         "preview_records": preview,
     }
-
-
-# ---------- helper for downstream code --------------------------------------
 
 
 def split_arrays_to_dict(dataset: LoadedDataset) -> Dict[str, Any]:
