@@ -1,0 +1,275 @@
+{
+  "overall": {
+    "rows": 30000,
+    "default_rate": 0.2212
+  },
+  "per_group_default_rate": {
+    "SEX": {
+      "1": {
+        "default_rate": 0.2417,
+        "count": 11888,
+        "gap_vs_overall_pp": 2.05
+      },
+      "2": {
+        "default_rate": 0.2078,
+        "count": 18112,
+        "gap_vs_overall_pp": -1.34
+      }
+    },
+    "AGE": {
+      "31-45": {
+        "default_rate": 0.2086,
+        "count": 14318,
+        "gap_vs_overall_pp": -1.26
+      },
+      "46-60": {
+        "default_rate": 0.2513,
+        "count": 4397,
+        "gap_vs_overall_pp": 3.01
+      },
+      "61-70": {
+        "default_rate": 0.2646,
+        "count": 257,
+        "gap_vs_overall_pp": 4.34
+      },
+      "71-80": {
+        "default_rate": 0.3333,
+        "count": 15,
+        "gap_vs_overall_pp": 11.21
+      },
+      "<=30": {
+        "default_rate": 0.2244,
+        "count": 11013,
+        "gap_vs_overall_pp": 0.32
+      }
+    },
+    "EDUCATION": {
+      "0": {
+        "default_rate": 0.0,
+        "count": 14,
+        "gap_vs_overall_pp": -22.12
+      },
+      "1": {
+        "default_rate": 0.1923,
+        "count": 10585,
+        "gap_vs_overall_pp": -2.89
+      },
+      "2": {
+        "default_rate": 0.2373,
+        "count": 14030,
+        "gap_vs_overall_pp": 1.61
+      },
+      "3": {
+        "default_rate": 0.2516,
+        "count": 4917,
+        "gap_vs_overall_pp": 3.04
+      },
+      "4": {
+        "default_rate": 0.0569,
+        "count": 123,
+        "gap_vs_overall_pp": -16.43
+      },
+      "5": {
+        "default_rate": 0.0643,
+        "count": 280,
+        "gap_vs_overall_pp": -15.69
+      },
+      "6": {
+        "default_rate": 0.1569,
+        "count": 51,
+        "gap_vs_overall_pp": -6.43
+      }
+    },
+    "MARRIAGE": {
+      "0": {
+        "default_rate": 0.0926,
+        "count": 54,
+        "gap_vs_overall_pp": -12.86
+      },
+      "1": {
+        "default_rate": 0.2347,
+        "count": 13659,
+        "gap_vs_overall_pp": 1.35
+      },
+      "2": {
+        "default_rate": 0.2093,
+        "count": 15964,
+        "gap_vs_overall_pp": -1.19
+      },
+      "3": {
+        "default_rate": 0.2601,
+        "count": 323,
+        "gap_vs_overall_pp": 3.89
+      }
+    }
+  },
+  "education_undocumented": {
+    "count": 345,
+    "fraction": 0.0115,
+    "default_rate_undocumented": 0.0754,
+    "default_rate_documented": 0.2229,
+    "values_seen": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ]
+  },
+  "limit_bal_by_group": {
+    "overall_mean": 167484.32,
+    "SEX": {
+      "1": {
+        "mean": 163519.83,
+        "pct_gap_vs_overall": -0.0237,
+        "below_20_pct_threshold": false
+      },
+      "2": {
+        "mean": 170086.46,
+        "pct_gap_vs_overall": 0.0155,
+        "below_20_pct_threshold": false
+      }
+    },
+    "EDUCATION": {
+      "0": {
+        "mean": 217142.86,
+        "pct_gap_vs_overall": 0.2965,
+        "below_20_pct_threshold": false
+      },
+      "1": {
+        "mean": 212956.07,
+        "pct_gap_vs_overall": 0.2715,
+        "below_20_pct_threshold": false
+      },
+      "2": {
+        "mean": 147062.44,
+        "pct_gap_vs_overall": -0.1219,
+        "below_20_pct_threshold": false
+      },
+      "3": {
+        "mean": 126550.27,
+        "pct_gap_vs_overall": -0.2444,
+        "below_20_pct_threshold": true
+      },
+      "4": {
+        "mean": 220894.31,
+        "pct_gap_vs_overall": 0.3189,
+        "below_20_pct_threshold": false
+      },
+      "5": {
+        "mean": 168164.29,
+        "pct_gap_vs_overall": 0.0041,
+        "below_20_pct_threshold": false
+      },
+      "6": {
+        "mean": 148235.29,
+        "pct_gap_vs_overall": -0.1149,
+        "below_20_pct_threshold": false
+      }
+    },
+    "MARRIAGE": {
+      "0": {
+        "mean": 132962.96,
+        "pct_gap_vs_overall": -0.2061,
+        "below_20_pct_threshold": true
+      },
+      "1": {
+        "mean": 182200.89,
+        "pct_gap_vs_overall": 0.0879,
+        "below_20_pct_threshold": false
+      },
+      "2": {
+        "mean": 156413.66,
+        "pct_gap_vs_overall": -0.0661,
+        "below_20_pct_threshold": false
+      },
+      "3": {
+        "mean": 98080.5,
+        "pct_gap_vs_overall": -0.4144,
+        "below_20_pct_threshold": true
+      }
+    }
+  },
+  "bill_amt_skew": {
+    "overall_median_avg_bill": 21051.83,
+    "SEX": {
+      "1": {
+        "median": 22039.33,
+        "pct_gap_vs_overall": 0.0469,
+        "exceeds_15_pct_flag": false
+      },
+      "2": {
+        "median": 20262.17,
+        "pct_gap_vs_overall": -0.0375,
+        "exceeds_15_pct_flag": false
+      }
+    },
+    "EDUCATION": {
+      "0": {
+        "median": 6366.92,
+        "pct_gap_vs_overall": -0.6976,
+        "exceeds_15_pct_flag": true
+      },
+      "1": {
+        "median": 15179.67,
+        "pct_gap_vs_overall": -0.2789,
+        "exceeds_15_pct_flag": true
+      },
+      "2": {
+        "median": 25011.58,
+        "pct_gap_vs_overall": 0.1881,
+        "exceeds_15_pct_flag": true
+      },
+      "3": {
+        "median": 22630.17,
+        "pct_gap_vs_overall": 0.075,
+        "exceeds_15_pct_flag": false
+      },
+      "4": {
+        "median": 12205.83,
+        "pct_gap_vs_overall": -0.4202,
+        "exceeds_15_pct_flag": true
+      },
+      "5": {
+        "median": 34832.83,
+        "pct_gap_vs_overall": 0.6546,
+        "exceeds_15_pct_flag": true
+      },
+      "6": {
+        "median": 29898.0,
+        "pct_gap_vs_overall": 0.4202,
+        "exceeds_15_pct_flag": true
+      }
+    },
+    "MARRIAGE": {
+      "0": {
+        "median": 12316.58,
+        "pct_gap_vs_overall": -0.4149,
+        "exceeds_15_pct_flag": true
+      },
+      "1": {
+        "median": 21074.67,
+        "pct_gap_vs_overall": 0.0011,
+        "exceeds_15_pct_flag": false
+      },
+      "2": {
+        "median": 21122.83,
+        "pct_gap_vs_overall": 0.0034,
+        "exceeds_15_pct_flag": false
+      },
+      "3": {
+        "median": 19573.83,
+        "pct_gap_vs_overall": -0.0702,
+        "exceeds_15_pct_flag": false
+      }
+    }
+  },
+  "negative_bill_amt": {
+    "count": 1930,
+    "fraction": 0.0643,
+    "default_rate_negative_bill": 0.1648,
+    "default_rate_non_negative": 0.2251
+  }
+}
