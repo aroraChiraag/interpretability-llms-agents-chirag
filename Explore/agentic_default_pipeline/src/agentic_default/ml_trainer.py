@@ -106,12 +106,9 @@ class ModelResult:
     #: Test-set predicted labels (0/1), aligned with x_test/y_test ordering.
     #: Used by the fairness pipeline; trimmed out of LLM-facing payloads.
     predictions: List[int] = field(default_factory=list)
-    #: Predicted probabilities for class 1 (positive), aligned with predictions.
-    #: Used by visualizations (PR curve, threshold analysis). Not serialised to JSON.
-    probabilities: List[float] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
-        """Return a JSON-friendly dictionary (probabilities excluded to keep files small)."""
+        """Return a JSON-friendly dictionary."""
         return {
             "model_name": self.model_name,
             "metrics": self.metrics,
@@ -121,7 +118,6 @@ class ModelResult:
             "notes": self.notes,
             "hyperparameters": self.hyperparameters,
             "predictions": self.predictions,
-            # probabilities intentionally omitted from JSON output
         }
 
 
@@ -243,15 +239,8 @@ def _train_one(
     feature_names: Sequence[str],
     random_state: int,
     params: Dict[str, Any],
-    model_pickle_dir: Optional[Path] = None,
 ) -> ModelResult:
-    """Fit one model, evaluate on the test split, return a ModelResult.
-
-    If ``model_pickle_dir`` is given, the fitted estimator is pickled to
-    ``<dir>/<model_name>.pkl`` so the Streamlit UI can offer a download
-    button. Pickle errors are caught and surfaced in ``notes`` rather
-    than failing the whole run.
-    """
+    """Fit one model, evaluate on the test split, return a ModelResult."""
     note = ""
     if model_name == "random_forest":
         model = _build_random_forest(random_state, params)
@@ -292,17 +281,6 @@ def _train_one(
 
     cm = confusion_matrix(y_test, y_pred).tolist()
 
-    if model_pickle_dir is not None:
-        try:
-            import pickle
-            model_pickle_dir = Path(model_pickle_dir)
-            model_pickle_dir.mkdir(parents=True, exist_ok=True)
-            pkl_path = model_pickle_dir / f"{model_name}.pkl"
-            with open(pkl_path, "wb") as fh:
-                pickle.dump(model, fh)
-        except Exception as exc:  # noqa: BLE001
-            note = (note + "; " if note else "") + f"pickle failed: {exc!r}"
-
     return ModelResult(
         model_name=model_name,
         metrics=metrics,
@@ -312,7 +290,6 @@ def _train_one(
         notes=note,
         hyperparameters=params,
         predictions=[int(v) for v in y_pred],
-        probabilities=[float(v) for v in y_score] if y_score is not None else [],
     )
 
 
@@ -359,10 +336,6 @@ def train_and_evaluate(
     """
     full_params = merge_hyperparameters(hyperparameters)
 
-    pickle_dir: Optional[Path] = None
-    if output_dir is not None:
-        pickle_dir = Path(output_dir) / "models"
-
     results: List[ModelResult] = []
     for model_name in models:
         result = _train_one(
@@ -374,7 +347,6 @@ def train_and_evaluate(
             feature_names=feature_names,
             random_state=random_state,
             params=full_params.get(model_name, {}),
-            model_pickle_dir=pickle_dir,
         )
         results.append(result)
 
@@ -385,17 +357,8 @@ def train_and_evaluate(
     )
     best_model = leaderboard[0].model_name if leaderboard else None
 
-    # Build the in-memory report. Probabilities are injected here but excluded
-    # from to_dict() so they are never written to the on-disk JSON.
-    model_dicts: List[Dict[str, Any]] = []
-    for r in results:
-        d = r.to_dict()
-        if r.probabilities:
-            d["probabilities"] = r.probabilities
-        model_dicts.append(d)
-
     report = {
-        "models": model_dicts,
+        "models": [r.to_dict() for r in results],
         "leaderboard": [
             {
                 "model_name": r.model_name,
@@ -414,17 +377,8 @@ def train_and_evaluate(
     if output_dir is not None:
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
-        # Strip predictions/probabilities from the on-disk JSON — they are
-        # large and only useful for downstream in-process consumers (the
-        # fairness pipeline reads them straight from PipelineState).
-        on_disk = {
-            **report,
-            "models": [
-                {k: v for k, v in m.items() if k not in {"predictions", "probabilities"}}
-                for m in report["models"]
-            ],
-        }
         (output_dir / "metrics_report.json").write_text(
-            json.dumps(on_disk, indent=2), encoding="utf-8"
+            json.dumps(report, indent=2), encoding="utf-8"
         )
+
     return report
