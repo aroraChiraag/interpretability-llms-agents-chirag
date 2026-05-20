@@ -1,0 +1,62 @@
+{
+  "rows_before": 30000,
+  "rows_after": 29965,
+  "total_rows_removed": 35,
+  "duplicates_removed": 35,
+  "missing_rows_dropped": 0,
+  "education_codes_remapped": 345,
+  "outliers_capped": {
+    "LIMIT_BAL": {
+      "lower": 10000.0,
+      "upper": 500000.0
+    },
+    "BILL_AMT1": {
+      "lower": -81.0,
+      "upper": 350134.48
+    },
+    "BILL_AMT2": {
+      "lower": -200.0,
+      "upper": 337505.08
+    },
+    "BILL_AMT3": {
+      "lower": -200.0,
+      "upper": 325254.04
+    },
+    "BILL_AMT4": {
+      "lower": -212.72,
+      "upper": 305006.72
+    },
+    "BILL_AMT5": {
+      "lower": -232.36,
+      "upper": 285879.88
+    },
+    "BILL_AMT6": {
+      "lower": -332.08,
+      "upper": 279577.16
+    },
+    "PAY_AMT1": {
+      "lower": 0.0,
+      "upper": 66843.48
+    },
+    "PAY_AMT2": {
+      "lower": 0.0,
+      "upper": 76651.72
+    },
+    "PAY_AMT3": {
+      "lower": 0.0,
+      "upper": 70000.0
+    },
+    "PAY_AMT4": {
+      "lower": 0.0,
+      "upper": 67139.84
+    },
+    "PAY_AMT5": {
+      "lower": 0.0,
+      "upper": 65627.16
+    },
+    "PAY_AMT6": {
+      "lower": 0.0,
+      "upper": 82760.8
+    }
+  }
+}

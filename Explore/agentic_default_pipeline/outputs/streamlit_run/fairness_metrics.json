@@ -5,163 +5,382 @@
         "attribute": "SEX",
         "groups": {
           "female": {
-            "count": 3598,
-            "selection_rate": 0.1526,
-            "tpr": 0.4347,
-            "fpr": 0.0763,
-            "base_rate": 0.2129
+            "count": 3661,
+            "selection_rate": 0.1445,
+            "tpr": 0.432,
+            "fpr": 0.0696,
+            "base_rate": 0.2068
           },
           "male": {
-            "count": 2402,
-            "selection_rate": 0.1657,
-            "tpr": 0.41,
-            "fpr": 0.0913,
-            "base_rate": 0.2336
+            "count": 2332,
+            "selection_rate": 0.1732,
+            "tpr": 0.4042,
+            "fpr": 0.0987,
+            "base_rate": 0.244
           }
         },
-        "disparate_impact": 0.9209,
+        "disparate_impact": 0.8343,
         "passes_80_pct_rule": true,
         "equalized_odds": {
-          "tpr_gap": 0.0247,
-          "fpr_gap": 0.015
+          "tpr_gap": 0.0278,
+          "fpr_gap": 0.0291
         },
-        "predictive_equality_fpr_gap": 0.015
+        "predictive_equality_fpr_gap": 0.0291
       },
       "AGE": {
         "attribute": "AGE",
         "groups": {
           "31-45": {
-            "count": 2853,
-            "selection_rate": 0.1472,
-            "tpr": 0.4073,
-            "fpr": 0.0774,
-            "base_rate": 0.2117
+            "count": 2827,
+            "selection_rate": 0.1401,
+            "tpr": 0.4072,
+            "fpr": 0.0708,
+            "base_rate": 0.2059
           },
           "46-60": {
-            "count": 908,
-            "selection_rate": 0.1696,
-            "tpr": 0.3957,
-            "fpr": 0.0929,
-            "base_rate": 0.2533
+            "count": 906,
+            "selection_rate": 0.1744,
+            "tpr": 0.4309,
+            "fpr": 0.0788,
+            "base_rate": 0.2715
           },
           "<=30": {
-            "count": 2181,
-            "selection_rate": 0.1651,
-            "tpr": 0.4551,
-            "fpr": 0.0834,
-            "base_rate": 0.2196
+            "count": 2202,
+            "selection_rate": 0.1662,
+            "tpr": 0.4268,
+            "fpr": 0.094,
+            "base_rate": 0.2171
           },
           ">60": {
             "count": 58,
             "selection_rate": 0.2241,
-            "tpr": 0.5714,
-            "fpr": 0.1136,
-            "base_rate": 0.2414
+            "tpr": 0.5,
+            "fpr": 0.0789,
+            "base_rate": 0.3448
           }
         },
-        "disparate_impact": 0.6568,
+        "disparate_impact": 0.6252,
         "passes_80_pct_rule": false,
         "equalized_odds": {
-          "tpr_gap": 0.1757,
-          "fpr_gap": 0.0362
+          "tpr_gap": 0.0928,
+          "fpr_gap": 0.0232
         },
-        "predictive_equality_fpr_gap": 0.0362
+        "predictive_equality_fpr_gap": 0.0232
       },
       "MARRIAGE": {
         "attribute": "MARRIAGE",
         "groups": {
           "marriage_0": {
-            "count": 7,
-            "selection_rate": 0.1429,
-            "tpr": null,
+            "count": 8,
+            "selection_rate": 0.125,
+            "tpr": 0.0,
             "fpr": 0.1429,
-            "base_rate": 0.0
+            "base_rate": 0.125
           },
           "married": {
-            "count": 2767,
-            "selection_rate": 0.1641,
-            "tpr": 0.4177,
-            "fpr": 0.0834,
-            "base_rate": 0.2414
+            "count": 2756,
+            "selection_rate": 0.1615,
+            "tpr": 0.4238,
+            "fpr": 0.0784,
+            "base_rate": 0.2406
           },
           "other": {
-            "count": 68,
-            "selection_rate": 0.1029,
-            "tpr": 0.25,
-            "fpr": 0.0714,
-            "base_rate": 0.1765
+            "count": 57,
+            "selection_rate": 0.193,
+            "tpr": 0.5,
+            "fpr": 0.093,
+            "base_rate": 0.2456
           },
           "single": {
-            "count": 3158,
-            "selection_rate": 0.1536,
-            "tpr": 0.4343,
-            "fpr": 0.0812,
-            "base_rate": 0.2049
+            "count": 3172,
+            "selection_rate": 0.1501,
+            "tpr": 0.4151,
+            "fpr": 0.082,
+            "base_rate": 0.2043
           }
         },
-        "disparate_impact": 0.6271,
+        "disparate_impact": 0.6477,
         "passes_80_pct_rule": false,
         "equalized_odds": {
-          "tpr_gap": 0.1843,
-          "fpr_gap": 0.0715
+          "tpr_gap": 0.5,
+          "fpr_gap": 0.0645
         },
-        "predictive_equality_fpr_gap": 0.0715
-      }
+        "predictive_equality_fpr_gap": 0.0645
+      },
+      "_tuning_notes": ""
+    },
+    "xgboost": {
+      "SEX": {
+        "attribute": "SEX",
+        "groups": {
+          "female": {
+            "count": 3661,
+            "selection_rate": 0.2835,
+            "tpr": 0.6367,
+            "fpr": 0.1915,
+            "base_rate": 0.2068
+          },
+          "male": {
+            "count": 2332,
+            "selection_rate": 0.3439,
+            "tpr": 0.6274,
+            "fpr": 0.2524,
+            "base_rate": 0.244
+          }
+        },
+        "disparate_impact": 0.8244,
+        "passes_80_pct_rule": true,
+        "equalized_odds": {
+          "tpr_gap": 0.0093,
+          "fpr_gap": 0.0609
+        },
+        "predictive_equality_fpr_gap": 0.0609
+      },
+      "AGE": {
+        "attribute": "AGE",
+        "groups": {
+          "31-45": {
+            "count": 2827,
+            "selection_rate": 0.277,
+            "tpr": 0.6065,
+            "fpr": 0.1915,
+            "base_rate": 0.2059
+          },
+          "46-60": {
+            "count": 906,
+            "selection_rate": 0.362,
+            "tpr": 0.6748,
+            "fpr": 0.2455,
+            "base_rate": 0.2715
+          },
+          "<=30": {
+            "count": 2202,
+            "selection_rate": 0.3215,
+            "tpr": 0.6381,
+            "fpr": 0.2338,
+            "base_rate": 0.2171
+          },
+          ">60": {
+            "count": 58,
+            "selection_rate": 0.3621,
+            "tpr": 0.75,
+            "fpr": 0.1579,
+            "base_rate": 0.3448
+          }
+        },
+        "disparate_impact": 0.765,
+        "passes_80_pct_rule": false,
+        "equalized_odds": {
+          "tpr_gap": 0.1435,
+          "fpr_gap": 0.0876
+        },
+        "predictive_equality_fpr_gap": 0.0876
+      },
+      "MARRIAGE": {
+        "attribute": "MARRIAGE",
+        "groups": {
+          "marriage_0": {
+            "count": 8,
+            "selection_rate": 0.25,
+            "tpr": 0.0,
+            "fpr": 0.2857,
+            "base_rate": 0.125
+          },
+          "married": {
+            "count": 2756,
+            "selection_rate": 0.3229,
+            "tpr": 0.6531,
+            "fpr": 0.2183,
+            "base_rate": 0.2406
+          },
+          "other": {
+            "count": 57,
+            "selection_rate": 0.2632,
+            "tpr": 0.5,
+            "fpr": 0.186,
+            "base_rate": 0.2456
+          },
+          "single": {
+            "count": 3172,
+            "selection_rate": 0.2941,
+            "tpr": 0.6157,
+            "fpr": 0.2116,
+            "base_rate": 0.2043
+          }
+        },
+        "disparate_impact": 0.7742,
+        "passes_80_pct_rule": false,
+        "equalized_odds": {
+          "tpr_gap": 0.6531,
+          "fpr_gap": 0.0997
+        },
+        "predictive_equality_fpr_gap": 0.0997
+      },
+      "_tuning_notes": "xgboost.XGBClassifier; GridSearchCV cv=10 scoring=recall best_cv_score=0.6465 best_params={'learning_rate': 0.05, 'max_depth': 3, 'n_estimators': 200}"
+    },
+    "neural_network": {
+      "SEX": {
+        "attribute": "SEX",
+        "groups": {
+          "female": {
+            "count": 3661,
+            "selection_rate": 0.1084,
+            "tpr": 0.3554,
+            "fpr": 0.0441,
+            "base_rate": 0.2068
+          },
+          "male": {
+            "count": 2332,
+            "selection_rate": 0.1274,
+            "tpr": 0.3445,
+            "fpr": 0.0573,
+            "base_rate": 0.244
+          }
+        },
+        "disparate_impact": 0.8509,
+        "passes_80_pct_rule": true,
+        "equalized_odds": {
+          "tpr_gap": 0.0109,
+          "fpr_gap": 0.0132
+        },
+        "predictive_equality_fpr_gap": 0.0132
+      },
+      "AGE": {
+        "attribute": "AGE",
+        "groups": {
+          "31-45": {
+            "count": 2827,
+            "selection_rate": 0.1047,
+            "tpr": 0.3402,
+            "fpr": 0.0437,
+            "base_rate": 0.2059
+          },
+          "46-60": {
+            "count": 906,
+            "selection_rate": 0.1302,
+            "tpr": 0.3699,
+            "fpr": 0.0409,
+            "base_rate": 0.2715
+          },
+          "<=30": {
+            "count": 2202,
+            "selection_rate": 0.1249,
+            "tpr": 0.364,
+            "fpr": 0.0586,
+            "base_rate": 0.2171
+          },
+          ">60": {
+            "count": 58,
+            "selection_rate": 0.0862,
+            "tpr": 0.1,
+            "fpr": 0.0789,
+            "base_rate": 0.3448
+          }
+        },
+        "disparate_impact": 0.6621,
+        "passes_80_pct_rule": false,
+        "equalized_odds": {
+          "tpr_gap": 0.2699,
+          "fpr_gap": 0.038
+        },
+        "predictive_equality_fpr_gap": 0.038
+      },
+      "MARRIAGE": {
+        "attribute": "MARRIAGE",
+        "groups": {
+          "marriage_0": {
+            "count": 8,
+            "selection_rate": 0.25,
+            "tpr": 0.0,
+            "fpr": 0.2857,
+            "base_rate": 0.125
+          },
+          "married": {
+            "count": 2756,
+            "selection_rate": 0.1245,
+            "tpr": 0.3665,
+            "fpr": 0.0478,
+            "base_rate": 0.2406
+          },
+          "other": {
+            "count": 57,
+            "selection_rate": 0.1404,
+            "tpr": 0.3571,
+            "fpr": 0.0698,
+            "base_rate": 0.2456
+          },
+          "single": {
+            "count": 3172,
+            "selection_rate": 0.1075,
+            "tpr": 0.3349,
+            "fpr": 0.0491,
+            "base_rate": 0.2043
+          }
+        },
+        "disparate_impact": 0.43,
+        "passes_80_pct_rule": false,
+        "equalized_odds": {
+          "tpr_gap": 0.3665,
+          "fpr_gap": 0.2379
+        },
+        "predictive_equality_fpr_gap": 0.2379
+      },
+      "_tuning_notes": "feature importance proxied via |W1| sum across hidden units"
     }
   },
   "summary": {
     "AGE": {
       "best_disparate_impact": [
-        "random_forest",
-        0.6568
+        "xgboost",
+        0.765
       ],
       "worst_disparate_impact": [
         "random_forest",
-        0.6568
+        0.6252
       ],
       "best_fpr_gap": [
         "random_forest",
-        0.0362
+        0.0232
       ],
       "worst_fpr_gap": [
-        "random_forest",
-        0.0362
+        "xgboost",
+        0.0876
       ]
     },
     "MARRIAGE": {
       "best_disparate_impact": [
-        "random_forest",
-        0.6271
+        "xgboost",
+        0.7742
       ],
       "worst_disparate_impact": [
-        "random_forest",
-        0.6271
+        "neural_network",
+        0.43
       ],
       "best_fpr_gap": [
         "random_forest",
-        0.0715
+        0.0645
       ],
       "worst_fpr_gap": [
-        "random_forest",
-        0.0715
+        "neural_network",
+        0.2379
       ]
     },
     "SEX": {
       "best_disparate_impact": [
-        "random_forest",
-        0.9209
+        "neural_network",
+        0.8509
       ],
       "worst_disparate_impact": [
-        "random_forest",
-        0.9209
+        "xgboost",
+        0.8244
       ],
       "best_fpr_gap": [
-        "random_forest",
-        0.015
+        "neural_network",
+        0.0132
       ],
       "worst_fpr_gap": [
-        "random_forest",
-        0.015
+        "xgboost",
+        0.0609
       ]
     }
   }

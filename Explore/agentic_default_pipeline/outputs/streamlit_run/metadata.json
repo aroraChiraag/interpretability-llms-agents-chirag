@@ -1,7 +1,7 @@
 [
   {
     "n_rows": 30000,
-    "n_features": 23,
+    "n_features": 32,
     "feature_names": [
       "LIMIT_BAL",
       "SEX",
@@ -25,7 +25,16 @@
       "PAY_AMT3",
       "PAY_AMT4",
       "PAY_AMT5",
-      "PAY_AMT6"
+      "PAY_AMT6",
+      "MAX_DELAY",
+      "MEAN_DELAY",
+      "MONTHS_DELAYED",
+      "DELAY_TREND",
+      "UTIL_AVG",
+      "UTIL_RECENT",
+      "BILL_TREND",
+      "PAYMENT_RATIO_AVG",
+      "ZERO_PAYMENT_MONTHS"
     ],
     "target_name": "default payment next month",
     "class_balance": {
