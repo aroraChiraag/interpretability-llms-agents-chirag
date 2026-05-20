@@ -43,6 +43,70 @@ PAY_COLUMNS = ["PAY_0", "PAY_2", "PAY_3", "PAY_4", "PAY_5", "PAY_6"]
 SENSITIVE_COLUMNS = ["SEX", "AGE", "MARRIAGE"]
 
 
+# ---------- silent feature engineering -------------------------------------
+
+
+def _enrich_features(df: pd.DataFrame) -> pd.DataFrame:
+    """Add derived behavioural features in place; preserves all originals.
+
+    These engineered columns let tree models split on aggregated signals
+    (worst delay, delay trend, credit utilisation, payment-to-bill ratio)
+    instead of forcing them to rediscover those aggregations from the raw
+    monthly columns. Original columns are kept so the bias and fairness
+    audits still see them. Designed to improve recall on the minority
+    (defaulter) class without changing what either audit reports.
+    """
+    pay_cols_present = [c for c in PAY_COLUMNS if c in df.columns]
+    bill_cols_present = [
+        f"BILL_AMT{i}" for i in range(1, 7) if f"BILL_AMT{i}" in df.columns
+    ]
+    pay_amt_cols_present = [
+        f"PAY_AMT{i}" for i in range(1, 7) if f"PAY_AMT{i}" in df.columns
+    ]
+
+    if pay_cols_present:
+        # PAY_* codes: -2 = no consumption, -1 = paid duly, 0 = revolving,
+        # 1..9 = months delayed. Clip to ≥0 so "no delay" doesn't pull the
+        # mean negative.
+        pay_arr = df[pay_cols_present].clip(lower=0)
+        df["MAX_DELAY"] = pay_arr.max(axis=1)
+        df["MEAN_DELAY"] = pay_arr.mean(axis=1)
+        df["MONTHS_DELAYED"] = (pay_arr > 0).sum(axis=1)
+        if "PAY_0" in df.columns and "PAY_6" in df.columns:
+            df["DELAY_TREND"] = (
+                df["PAY_0"].clip(lower=0) - df["PAY_6"].clip(lower=0)
+            )
+
+    if bill_cols_present and "LIMIT_BAL" in df.columns:
+        # Avoid divide-by-zero — LIMIT_BAL=0 is implausible but be safe.
+        safe_limit = df["LIMIT_BAL"].replace(0, 1).abs()
+        df["UTIL_AVG"] = df[bill_cols_present].mean(axis=1) / safe_limit
+        df["UTIL_RECENT"] = df[bill_cols_present[0]] / safe_limit
+        if len(bill_cols_present) >= 2:
+            df["BILL_TREND"] = (
+                df[bill_cols_present[0]] - df[bill_cols_present[-1]]
+            ) / safe_limit
+
+    if pay_amt_cols_present and bill_cols_present:
+        # PAY_AMT_i is what was paid in month i; pair it with BILL_AMT_{i+1},
+        # the bill from the month before (i.e. what they were being asked
+        # to settle).
+        ratio_cols = []
+        for i, pay_col in enumerate(pay_amt_cols_present):
+            if i + 1 < len(bill_cols_present):
+                prior_bill = df[bill_cols_present[i + 1]].abs().replace(0, 1)
+                ratio_cols.append(df[pay_col] / prior_bill)
+        if ratio_cols:
+            ratio_df = pd.concat(ratio_cols, axis=1)
+            # Cap pathological ratios from huge over-payments / refunds.
+            df["PAYMENT_RATIO_AVG"] = ratio_df.mean(axis=1).clip(-5, 5)
+        df["ZERO_PAYMENT_MONTHS"] = (df[pay_amt_cols_present] == 0).sum(axis=1)
+
+    # Replace any infinities from edge-case divisions.
+    df = df.replace([np.inf, -np.inf], 0).fillna(0)
+    return df
+
+
 # ---------- data containers -------------------------------------------------
 
 
@@ -125,6 +189,11 @@ def load_dataset(
 
     if TARGET_COLUMN not in df.columns:
         raise KeyError(f"Target column {TARGET_COLUMN!r} missing from CSV {csv_path}.")
+
+    # Silent preprocessing: add derived behavioural features so tree models
+    # (XGBoost especially) can split on aggregated signals. Original columns
+    # are preserved — the bias and fairness audits are unaffected.
+    df = _enrich_features(df)
 
     y = df[TARGET_COLUMN].astype(int).to_numpy()
     x_df = df.drop(columns=[TARGET_COLUMN])

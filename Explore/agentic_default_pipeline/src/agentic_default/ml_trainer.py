@@ -61,6 +61,11 @@ def default_hyperparameters() -> Dict[str, Dict[str, Any]]:
                 "max_depth": 5,
                 "subsample": 0.9,
                 "colsample_bytree": 0.9,
+                # Class imbalance is ~78/22 (non-default / default). Setting
+                # scale_pos_weight ≈ 3.5 tells XGBoost to up-weight gradient
+                # contributions from defaulters, which lifts recall on the
+                # minority class without changing the underlying data.
+                "scale_pos_weight": 3.5,
             },
             "neural_network": {
                 "hidden_layer_sizes": [64, 32],
