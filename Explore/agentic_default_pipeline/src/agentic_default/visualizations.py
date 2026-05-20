@@ -29,6 +29,16 @@ from plotly.subplots import make_subplots
 
 from .bias_glossary import decode_group_label
 
+
+def _validate_fairness_per_model(per_model: dict, context: str = "") -> None:
+    """Warn if any per-model value is not a dict (e.g. _tuning_notes leaked in)."""
+    import warnings as _w
+    for model_name, attrs in per_model.items():
+        for k, v in attrs.items():
+            if not k.startswith("_") and not isinstance(v, dict):
+                _w.warn(f"fairness_metrics[per_model][{model_name!r}][{k!r}] = {type(v).__name__!r}, expected dict. Context: {context}")
+
+
 # ── Palette ───────────────────────────────────────────────────────────────────
 
 MODEL_COLORS: Dict[str, str] = {
@@ -73,25 +83,31 @@ def _model_color(name: str) -> str:
 
 
 def _base_layout(**kwargs) -> dict:
-    """Shared dark-theme layout defaults."""
-    return dict(
-        paper_bgcolor=_PAPER_BG,
-        plot_bgcolor=_PLOT_BG,
-        font=_FONT,
-        margin=dict(l=60, r=30, t=60, b=60),
+    """Shared dark-theme layout defaults.
+
+    Uses dict-literal unpacking so caller kwargs silently override defaults
+    (dict(key=val, **kwargs) raises TypeError on duplicate keys in Python 3).
+    """
+    return {
+        "paper_bgcolor": _PAPER_BG,
+        "plot_bgcolor":  _PLOT_BG,
+        "font":          _FONT,
+        "margin":        dict(l=60, r=30, t=60, b=60),
         **kwargs,
-    )
+    }
 
 
 def _axis_style(**kwargs) -> dict:
-    return dict(
-        gridcolor=_GRID_COLOR,
-        linecolor=_GRID_COLOR,
-        tickcolor=_TEXT_COLOR,
-        tickfont=dict(color=_TEXT_COLOR),
-        title_font=dict(color=_TEXT_COLOR),
+    # Use dict-literal unpacking so caller kwargs silently override defaults
+    # (dict(key=val, **kwargs) raises TypeError on duplicate keys in Python 3).
+    return {
+        "gridcolor":   _GRID_COLOR,
+        "linecolor":   _GRID_COLOR,
+        "tickcolor":   _TEXT_COLOR,
+        "tickfont":    dict(color=_TEXT_COLOR),
+        "title_font":  dict(color=_TEXT_COLOR),
         **kwargs,
-    )
+    }
 
 
 def _all_models(fairness_metrics: dict) -> List[str]:
@@ -99,7 +115,10 @@ def _all_models(fairness_metrics: dict) -> List[str]:
 
 
 def _all_attrs(fairness_metrics: dict, model: str) -> List[str]:
-    return list(((fairness_metrics.get("per_model") or {}).get(model) or {}).keys())
+    return [
+        k for k, v in ((fairness_metrics.get("per_model") or {}).get(model) or {}).items()
+        if not k.startswith("_") and isinstance(v, dict)
+    ]
 
 
 def _pretty_model(name: str) -> str:
@@ -134,7 +153,9 @@ def plot_fpr_comparison(fairness_metrics: dict) -> go.Figure:
         return _empty_fig("No fairness metrics available. Train a model and run Compute + Audit.")
 
     models   = list(per_model.keys())
-    attrs    = list(next(iter(per_model.values())).keys())
+    _first_model_data = next(iter(per_model.values()))
+    _first_model_data = {k: v for k, v in _first_model_data.items() if not k.startswith("_") and isinstance(v, dict)}
+    attrs    = list(_first_model_data.keys())
     n_attrs  = len(attrs)
 
     fig = make_subplots(
@@ -179,10 +200,10 @@ def plot_fpr_comparison(fairness_metrics: dict) -> go.Figure:
         **_base_layout(
             barmode="group",
             legend=dict(bgcolor="rgba(0,0,0,0)", font=dict(color=_TEXT_COLOR)),
-            height=310 * n_attrs,
+            height=340 * n_attrs,
         )
     )
-    fig.update_layout(margin=dict(l=70, r=30, t=50, b=80))
+    fig.update_layout(margin=dict(l=70, r=30, t=60, b=90))
     for i in range(1, n_attrs + 1):
         fig.update_xaxes(
             **_axis_style(title="Group"),
@@ -190,7 +211,8 @@ def plot_fpr_comparison(fairness_metrics: dict) -> go.Figure:
             row=i, col=1,
         )
         fig.update_yaxes(
-            **_axis_style(title="FPR", range=[0, 0.28]),
+            # Extended upper range so "outside" bar labels are never clipped
+            **_axis_style(title="FPR", range=[0, 0.42]),
             row=i, col=1,
         )
 
@@ -221,6 +243,7 @@ def plot_subgroup_radar(
 
     model_name  = model_name or next(iter(per_model))
     attrs_data  = per_model.get(model_name) or {}
+    attrs_data  = {k: v for k, v in attrs_data.items() if not k.startswith("_") and isinstance(v, dict)}
     attrs       = list(attrs_data.keys())
     if not attrs:
         return _empty_fig(f"No attribute data for {model_name}.")
@@ -345,8 +368,9 @@ def plot_confusion_matrix_grid(metrics_report: dict) -> go.Figure:
     titles = [_pretty_model(m["model_name"]) for m in models]
     fig = make_subplots(rows=1, cols=n, subplot_titles=titles)
 
-    labels = ["No Default (0)", "Default (1)"]
-    label_short = ["Actual: No Default", "Actual: Default"]
+    # Short labels prevent axis text from overlapping heatmap cells
+    labels = ["No Default", "Default"]
+    label_short = ["No Default", "Default"]
 
     for col_idx, m in enumerate(models, start=1):
         cm = np.array(m["confusion_matrix"])
@@ -355,7 +379,7 @@ def plot_confusion_matrix_grid(metrics_report: dict) -> go.Figure:
         cm_pct = np.where(row_totals > 0, cm / row_totals * 100, 0.0)
 
         text_vals = [
-            [f"<b>{cm[r][c]:,}</b><br><sub>{cm_pct[r][c]:.1f}%</sub>" for c in range(2)]
+            [f"<b>{cm[r][c]:,}</b><br>{cm_pct[r][c]:.1f}%" for c in range(2)]
             for r in range(2)
         ]
         cell_labels = [
@@ -370,7 +394,6 @@ def plot_confusion_matrix_grid(metrics_report: dict) -> go.Figure:
             for r in range(2)
         ]
 
-        # Color: TP/TN green, FP/FN red intensity by magnitude
         colorscale = [
             [0.0, "#1a1a2e"],
             [0.5, "#1565C0"],
@@ -384,6 +407,7 @@ def plot_confusion_matrix_grid(metrics_report: dict) -> go.Figure:
                 y=label_short,
                 text=text_vals,
                 texttemplate="%{text}",
+                textfont=dict(size=13, color="#ffffff"),
                 hovertext=hover_text,
                 hovertemplate="%{hovertext}<extra></extra>",
                 colorscale=colorscale,
@@ -396,12 +420,21 @@ def plot_confusion_matrix_grid(metrics_report: dict) -> go.Figure:
     fig.update_layout(
         **_base_layout(
             title=dict(text="Confusion Matrix by Model", font=dict(size=16, color=_TEXT_COLOR)),
-            height=350,
+            height=480,
         )
     )
+    fig.update_layout(margin=dict(l=100, r=30, t=100, b=80))
     for i in range(1, n + 1):
-        fig.update_xaxes(**_axis_style(title="Predicted"), row=1, col=i)
-        fig.update_yaxes(**_axis_style(title="Actual"), row=1, col=i)
+        fig.update_xaxes(
+            **_axis_style(title="Predicted", tickfont=dict(size=12, color=_TEXT_COLOR)),
+            automargin=True,
+            row=1, col=i,
+        )
+        fig.update_yaxes(
+            **_axis_style(title="Actual", tickfont=dict(size=12, color=_TEXT_COLOR)),
+            automargin=True,
+            row=1, col=i,
+        )
 
     return fig
 
@@ -546,7 +579,8 @@ def plot_agent_agreement_matrix(
         has_demo  = bool(top10 & DEMOGRAPHIC_FEATURES)
         has_proxy = bool(top10 & PROXY_FEATURES)
 
-        for attr in sorted(attrs_data.keys()):
+        for attr in sorted(k for k, v in attrs_data.items()
+                           if not k.startswith("_") and isinstance(v, dict)):
             attr_payload = attrs_data[attr]
             row_labels.append(f"{pretty}\n{attr}")
 
@@ -744,7 +778,10 @@ def plot_equalized_odds(fairness_metrics: dict) -> go.Figure:
     model_syms = {m: symbols[i % len(symbols)] for i, m in enumerate(per_model)}
 
     for model_name, attrs_data in per_model.items():
+        attrs_data = {k: v for k, v in attrs_data.items() if not k.startswith("_") and isinstance(v, dict)}
         for attr, attr_payload in attrs_data.items():
+            if not isinstance(attr_payload, dict):
+                continue
             eo = attr_payload.get("equalized_odds") or {}
             tpr_gap = eo.get("tpr_gap")
             fpr_gap = eo.get("fpr_gap")
@@ -757,16 +794,15 @@ def plot_equalized_odds(fairness_metrics: dict) -> go.Figure:
 
             fig.add_trace(go.Scatter(
                 x=[tpr_gap], y=[fpr_gap],
-                mode="markers+text",
+                # Labels removed from chart surface — they overlap when points
+                # are close together. Identification via legend + rich hover.
+                mode="markers",
                 marker=dict(
-                    size=16,
+                    size=18,
                     color=ATTR_COLORS.get(attr, "#90A4AE"),
                     symbol=model_syms[model_name],
                     line=dict(color=border, width=2),
                 ),
-                text=[f"{_pretty_model(model_name)}<br>{attr}"],
-                textposition="top center",
-                textfont=dict(size=9, color=_TEXT_COLOR),
                 name=f"{_pretty_model(model_name)} / {attr}",
                 customdata=[[di, passes]],
                 hovertemplate=(
@@ -792,8 +828,16 @@ def plot_equalized_odds(fairness_metrics: dict) -> go.Figure:
             title=dict(text="Equalized Odds: TPR Gap vs FPR Gap", font=dict(size=16, color=_TEXT_COLOR)),
             xaxis=_axis_style(title="TPR Gap (Equal Opportunity)", zeroline=True, zerolinecolor=_GRID_COLOR),
             yaxis=_axis_style(title="FPR Gap (Predictive Equality)", zeroline=True, zerolinecolor=_GRID_COLOR),
-            legend=dict(bgcolor="rgba(0,0,0,0)", font=dict(color=_TEXT_COLOR)),
-            height=480,
+            # Legend placed below chart so it never overlaps data points
+            legend=dict(
+                bgcolor="rgba(0,0,0,0)",
+                font=dict(color=_TEXT_COLOR, size=11),
+                orientation="h",
+                x=0, y=-0.22,
+                xanchor="left",
+            ),
+            height=560,
+            margin=dict(l=70, r=30, t=60, b=160),
         )
     )
     return fig
@@ -1095,11 +1139,12 @@ def plot_precision_recall_frontier(
                 x=recall, y=precision,
                 mode="lines",
                 name=legend_label,
-                line=dict(color=color, width=2),
+                line=dict(color=color, width=2.5),
                 hovertemplate=f"<b>{pretty}</b><br>Recall: %{{x:.3f}}<br>Precision: %{{y:.3f}}<extra></extra>",
             ))
         else:
-            # Fallback: single point
+            # Fallback: single point — no inline text to avoid overlapping when
+            # precision/recall values are similar across models. Rely on legend.
             metrics = m.get("metrics", {})
             rc = metrics.get("recall")
             pr = metrics.get("precision")
@@ -1107,11 +1152,10 @@ def plot_precision_recall_frontier(
                 legend_label = f"{pretty} (no curve — re-train for full PR)"
                 fig.add_trace(go.Scatter(
                     x=[rc], y=[pr],
-                    mode="markers+text",
-                    marker=dict(size=14, color=color, symbol="star"),
-                    text=[pretty],
-                    textposition="top center",
+                    mode="markers",
+                    marker=dict(size=16, color=color, symbol="star"),
                     name=legend_label,
+                    hovertemplate=f"<b>{pretty}</b><br>Recall: {rc:.3f}<br>Precision: {pr:.3f}<extra></extra>",
                 ))
 
     # No-skill baseline
@@ -1129,9 +1173,17 @@ def plot_precision_recall_frontier(
                 font=dict(size=16, color=_TEXT_COLOR),
             ),
             xaxis=_axis_style(title="Recall", range=[0, 1]),
-            yaxis=_axis_style(title="Precision", range=[0, 1]),
-            legend=dict(bgcolor="rgba(0,0,0,0)", font=dict(color=_TEXT_COLOR)),
-            height=460,
+            yaxis=_axis_style(title="Precision", range=[0, 1.05]),
+            # Legend below chart prevents long model names from overlapping curves
+            legend=dict(
+                bgcolor="rgba(0,0,0,0)",
+                font=dict(color=_TEXT_COLOR, size=11),
+                orientation="h",
+                x=0, y=-0.18,
+                xanchor="left",
+            ),
+            height=520,
+            margin=dict(l=70, r=30, t=60, b=120),
         )
     )
     return fig

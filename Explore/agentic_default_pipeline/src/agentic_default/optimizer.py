@@ -49,7 +49,16 @@ from .ml_trainer import (
 )
 
 
-SUPPORTED_TECHNIQUES = ("smote", "focal_loss", "grid_search", "optuna")
+SUPPORTED_TECHNIQUES = (
+    "smote",
+    "focal_loss",
+    "grid_search",
+    "optuna",
+    "class_weight",
+    "early_stopping",
+    "threshold_tuning",
+    "feature_selection",
+)
 
 
 # ---------- helpers ---------------------------------------------------------
@@ -461,6 +470,304 @@ def optuna_optimize(model_name: str,
     )
 
 
+# ---------- Class Weight Balancing -----------------------------------------
+
+
+def class_weight_optimize(
+    model_name: str,
+    x_train: np.ndarray, y_train: np.ndarray,
+    x_test: np.ndarray, y_test: np.ndarray,
+    feature_names: Sequence[str],
+    hyperparameters: Optional[Dict[str, Dict[str, Any]]] = None,
+    random_state: int = 42,
+) -> Dict[str, Any]:
+    """Re-train with class_weight='balanced' (RF) or scale_pos_weight (XGBoost).
+
+    Not supported for Neural Network — MLPClassifier has no class_weight param.
+    """
+    if model_name not in ("random_forest", "xgboost"):
+        raise ValueError(
+            f"Class Weight Balancing is only supported for random_forest and xgboost, "
+            f"not {model_name!r}."
+        )
+    hp = hyperparameters or default_hyperparameters()
+    notes_parts: List[str] = []
+
+    if model_name == "random_forest":
+        from sklearn.ensemble import RandomForestClassifier
+        params = {**hp.get("random_forest", {}), "class_weight": "balanced"}
+        model: Any = RandomForestClassifier(random_state=random_state, n_jobs=-1, **params)
+        notes_parts.append("Trained with class_weight='balanced'")
+    else:  # xgboost
+        neg = int((y_train == 0).sum())
+        pos = int((y_train == 1).sum())
+        spw = neg / max(pos, 1)
+        params_xgb = {**hp.get("xgboost", {}), "scale_pos_weight": spw}
+        try:
+            from xgboost import XGBClassifier  # type: ignore
+            model = XGBClassifier(
+                objective="binary:logistic",
+                eval_metric="logloss",
+                random_state=random_state,
+                n_jobs=-1,
+                tree_method="hist",
+                **params_xgb,
+            )
+        except ImportError:
+            from sklearn.ensemble import GradientBoostingClassifier
+            compatible = {
+                k: v for k, v in hp.get("xgboost", {}).items()
+                if k in {"n_estimators", "learning_rate", "max_depth"}
+            }
+            model = GradientBoostingClassifier(random_state=random_state, **compatible)
+            notes_parts.append(
+                "xgboost not installed — using sklearn GradientBoostingClassifier as substitute"
+            )
+        notes_parts.append(f"Trained with scale_pos_weight={spw:.3f} (neg/pos ratio)")
+
+    start = time.time()
+    model.fit(x_train, y_train)
+    train_seconds = time.time() - start
+    metrics, importance, cm, predictions = _evaluate(model, x_test, y_test, feature_names)
+
+    return _result_dict(
+        model_name=model_name,
+        metrics=metrics,
+        importance=importance,
+        cm=cm,
+        train_seconds=train_seconds,
+        notes="; ".join(filter(None, notes_parts)),
+        hyperparameters=hp.get(model_name, {}),
+        predictions=predictions,
+    )
+
+
+# ---------- Early Stopping -------------------------------------------------
+
+
+def early_stopping_optimize(
+    model_name: str,
+    x_train: np.ndarray, y_train: np.ndarray,
+    x_test: np.ndarray, y_test: np.ndarray,
+    feature_names: Sequence[str],
+    hyperparameters: Optional[Dict[str, Dict[str, Any]]] = None,
+    random_state: int = 42,
+    early_stopping_rounds: int = 10,
+    validation_fraction: float = 0.1,
+) -> Dict[str, Any]:
+    """Re-train with early stopping.
+
+    XGBoost: uses eval_set + early_stopping_rounds in fit().
+    Neural Network: sets early_stopping=True + n_iter_no_change.
+    Not supported for Random Forest — trees are not trained iteratively.
+    """
+    if model_name not in ("xgboost", "neural_network"):
+        raise ValueError(
+            f"Early Stopping is only supported for xgboost and neural_network, "
+            f"not {model_name!r}."
+        )
+    hp = hyperparameters or default_hyperparameters()
+    notes_parts: List[str] = []
+
+    if model_name == "xgboost":
+        from sklearn.model_selection import train_test_split
+        x_tr, x_val, y_tr, y_val = train_test_split(
+            x_train, y_train,
+            test_size=validation_fraction,
+            random_state=random_state,
+            stratify=y_train,
+        )
+        try:
+            from xgboost import XGBClassifier  # type: ignore
+            model: Any = XGBClassifier(
+                objective="binary:logistic",
+                eval_metric="logloss",
+                random_state=random_state,
+                n_jobs=-1,
+                tree_method="hist",
+                **hp.get("xgboost", {}),
+            )
+            start = time.time()
+            try:
+                model.fit(
+                    x_tr, y_tr,
+                    eval_set=[(x_val, y_val)],
+                    early_stopping_rounds=early_stopping_rounds,
+                    verbose=False,
+                )
+            except TypeError:
+                # Some XGBoost versions use the constructor parameter instead.
+                model.set_params(early_stopping_rounds=early_stopping_rounds)
+                model.fit(x_tr, y_tr, eval_set=[(x_val, y_val)], verbose=False)
+            train_seconds = time.time() - start
+            notes_parts.append(
+                f"XGBoost early_stopping_rounds={early_stopping_rounds}, "
+                f"val_fraction={validation_fraction:.0%}"
+            )
+        except ImportError:
+            from sklearn.ensemble import GradientBoostingClassifier
+            compatible = {
+                k: v for k, v in hp.get("xgboost", {}).items()
+                if k in {"n_estimators", "learning_rate", "max_depth"}
+            }
+            model = GradientBoostingClassifier(random_state=random_state, **compatible)
+            start = time.time()
+            model.fit(x_tr, y_tr)
+            train_seconds = time.time() - start
+            notes_parts.append(
+                "xgboost not installed — early stopping unavailable; used GradientBoosting"
+            )
+        metrics, importance, cm, predictions = _evaluate(model, x_test, y_test, feature_names)
+
+    else:  # neural_network
+        params = {
+            **hp.get("neural_network", {}),
+            "early_stopping": True,
+            "n_iter_no_change": early_stopping_rounds,
+            "validation_fraction": validation_fraction,
+        }
+        model = _build_neural_network(random_state, params)
+        start = time.time()
+        model.fit(x_train, y_train)
+        train_seconds = time.time() - start
+        metrics, importance, cm, predictions = _evaluate(model, x_test, y_test, feature_names)
+        notes_parts.append(
+            f"Neural Network early_stopping=True, "
+            f"n_iter_no_change={early_stopping_rounds}, "
+            f"validation_fraction={validation_fraction:.0%}"
+        )
+
+    return _result_dict(
+        model_name=model_name,
+        metrics=metrics,
+        importance=importance,
+        cm=cm,
+        train_seconds=train_seconds,
+        notes="; ".join(filter(None, notes_parts)),
+        hyperparameters=hp.get(model_name, {}),
+        predictions=predictions,
+    )
+
+
+# ---------- Threshold Tuning -----------------------------------------------
+
+
+def threshold_tuning_optimize(
+    model_name: str,
+    x_train: np.ndarray, y_train: np.ndarray,
+    x_test: np.ndarray, y_test: np.ndarray,
+    feature_names: Sequence[str],
+    hyperparameters: Optional[Dict[str, Dict[str, Any]]] = None,
+    random_state: int = 42,
+    threshold: float = 0.5,
+) -> Dict[str, Any]:
+    """Train model normally, then apply a custom decision threshold at prediction time."""
+    from sklearn.metrics import confusion_matrix as _cm_fn
+    hp = hyperparameters or default_hyperparameters()
+    model, note = _instantiate_model(model_name, hp, random_state)
+    notes_parts: List[str] = [note] if note else []
+
+    start = time.time()
+    model.fit(x_train, y_train)
+    train_seconds = time.time() - start
+
+    if hasattr(model, "predict_proba"):
+        y_score: Optional[np.ndarray] = model.predict_proba(x_test)[:, 1]
+        y_pred = (y_score >= threshold).astype(int)
+    elif hasattr(model, "decision_function"):
+        y_score = model.decision_function(x_test)
+        y_pred = (y_score >= threshold).astype(int)
+    else:
+        y_score = None
+        y_pred = model.predict(x_test)
+
+    metrics = _compute_metrics(y_test, y_pred, y_score)
+    importance: List[Dict[str, Any]] = []
+    if hasattr(model, "feature_importances_"):
+        importance = _feature_importance_records(
+            np.asarray(model.feature_importances_), feature_names
+        )
+    elif hasattr(model, "coefs_"):
+        importance = _feature_importance_records(
+            np.abs(model.coefs_[0]).sum(axis=1), feature_names
+        )
+    cm = _cm_fn(y_test, y_pred).tolist()
+    predictions = [int(v) for v in y_pred]
+
+    direction = (
+        "↑ precision bias" if threshold > 0.5
+        else "↑ recall bias" if threshold < 0.5
+        else "default (no bias)"
+    )
+    notes_parts.append(
+        f"Decision threshold={threshold:.2f} ({direction})"
+    )
+    return _result_dict(
+        model_name=model_name,
+        metrics=metrics,
+        importance=importance,
+        cm=cm,
+        train_seconds=train_seconds,
+        notes="; ".join(notes_parts),
+        hyperparameters=hp.get(model_name, {}),
+        predictions=predictions,
+    )
+
+
+# ---------- Feature Selection ----------------------------------------------
+
+
+def feature_selection_optimize(
+    model_name: str,
+    x_train: np.ndarray, y_train: np.ndarray,
+    x_test: np.ndarray, y_test: np.ndarray,
+    feature_names: Sequence[str],
+    hyperparameters: Optional[Dict[str, Dict[str, Any]]] = None,
+    random_state: int = 42,
+    excluded_features: Optional[Sequence[str]] = None,
+) -> Dict[str, Any]:
+    """Drop specified features by name then retrain the model."""
+    hp = hyperparameters or default_hyperparameters()
+    excluded_upper = {f.upper() for f in (excluded_features or [])}
+    feature_names_list = list(feature_names)
+
+    keep_idx = [
+        i for i, name in enumerate(feature_names_list)
+        if name.upper() not in excluded_upper
+    ]
+    kept_names = [feature_names_list[i] for i in keep_idx]
+
+    if not kept_names:
+        raise ValueError("All features were excluded — at least one feature must remain.")
+
+    x_tr = x_train[:, keep_idx]
+    x_te = x_test[:, keep_idx]
+
+    model, note = _instantiate_model(model_name, hp, random_state)
+    notes_parts: List[str] = [note] if note else []
+
+    start = time.time()
+    model.fit(x_tr, y_train)
+    train_seconds = time.time() - start
+    metrics, importance, cm, predictions = _evaluate(model, x_te, y_test, kept_names)
+
+    dropped = sorted(excluded_upper) or ["none"]
+    notes_parts.append(
+        f"Feature selection: excluded [{', '.join(dropped)}]; "
+        f"trained on {len(kept_names)}/{len(feature_names_list)} features"
+    )
+    return _result_dict(
+        model_name=model_name,
+        metrics=metrics,
+        importance=importance,
+        cm=cm,
+        train_seconds=train_seconds,
+        notes="; ".join(filter(None, notes_parts)),
+        hyperparameters=hp.get(model_name, {}),
+        predictions=predictions,
+    )
+
+
 # ---------- Unified entry point --------------------------------------------
 
 
@@ -513,6 +820,46 @@ def optimize(technique: str,
             timeout=int(technique_params.get("timeout", 600)),
             scoring=technique_params.get("scoring", "f1"),
             cv_folds=int(technique_params.get("cv_folds", 3)),
+        )
+    if technique == "class_weight":
+        return class_weight_optimize(
+            model_name=model_name,
+            x_train=x_train, y_train=y_train,
+            x_test=x_test, y_test=y_test,
+            feature_names=feature_names,
+            hyperparameters=hyperparameters,
+            random_state=random_state,
+        )
+    if technique == "early_stopping":
+        return early_stopping_optimize(
+            model_name=model_name,
+            x_train=x_train, y_train=y_train,
+            x_test=x_test, y_test=y_test,
+            feature_names=feature_names,
+            hyperparameters=hyperparameters,
+            random_state=random_state,
+            early_stopping_rounds=int(technique_params.get("early_stopping_rounds", 10)),
+            validation_fraction=float(technique_params.get("validation_fraction", 0.1)),
+        )
+    if technique == "threshold_tuning":
+        return threshold_tuning_optimize(
+            model_name=model_name,
+            x_train=x_train, y_train=y_train,
+            x_test=x_test, y_test=y_test,
+            feature_names=feature_names,
+            hyperparameters=hyperparameters,
+            random_state=random_state,
+            threshold=float(technique_params.get("threshold", 0.5)),
+        )
+    if technique == "feature_selection":
+        return feature_selection_optimize(
+            model_name=model_name,
+            x_train=x_train, y_train=y_train,
+            x_test=x_test, y_test=y_test,
+            feature_names=feature_names,
+            hyperparameters=hyperparameters,
+            random_state=random_state,
+            excluded_features=technique_params.get("excluded_features", []),
         )
     return grid_search_optimize(
         model_name=model_name,

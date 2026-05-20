@@ -169,6 +169,7 @@ def compute_fairness_for_all_models(
     y_true: np.ndarray,
     sensitive_df: pd.DataFrame,
     attributes: Optional[List[str]] = None,
+    tuning_notes: Optional[Dict[str, str]] = None,
 ) -> Dict[str, Any]:
     """Iterate over every model in a metrics_report and compute fairness.
 
@@ -202,6 +203,7 @@ def compute_fairness_for_all_models(
             sensitive_df=sensitive_df,
             attributes=attributes,
         )
+        per_model[m["model_name"]]["_tuning_notes"] = (tuning_notes or {}).get(m["model_name"], "")
 
     summary = _summarise(per_model)
     return {"per_model": per_model, "summary": summary}
@@ -211,21 +213,30 @@ def _summarise(per_model: Dict[str, Any]) -> Dict[str, Any]:
     """Extract a small "who-wins-what" headline from the per-model results."""
     if not per_model:
         return {}
-    attributes = sorted({attr for v in per_model.values() for attr in v})
+    # Skip internal keys (e.g. _tuning_notes) — only keep real attribute dicts.
+    attributes = sorted({
+        attr
+        for v in per_model.values()
+        for attr in v
+        if not attr.startswith("_") and isinstance(v.get(attr), dict)
+    })
     summary: Dict[str, Any] = {}
     for attr in attributes:
         # disparate-impact ranking (higher = fairer; ignore Nones)
         di_scores = [
             (model, v[attr].get("disparate_impact"))
             for model, v in per_model.items()
-            if attr in v and v[attr].get("disparate_impact") is not None
+            if attr in v and isinstance(v[attr], dict)
+            and v[attr].get("disparate_impact") is not None
         ]
         di_scores.sort(key=lambda t: t[1], reverse=True)
         # FPR-gap ranking (lower = fairer)
         fpr_scores = [
             (model, v[attr]["equalized_odds"].get("fpr_gap"))
             for model, v in per_model.items()
-            if attr in v and v[attr]["equalized_odds"].get("fpr_gap") is not None
+            if attr in v and isinstance(v[attr], dict)
+            and v[attr].get("equalized_odds") is not None
+            and v[attr]["equalized_odds"].get("fpr_gap") is not None
         ]
         fpr_scores.sort(key=lambda t: t[1])
         summary[attr] = {

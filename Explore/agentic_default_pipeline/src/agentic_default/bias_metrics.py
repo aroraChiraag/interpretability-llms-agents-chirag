@@ -190,12 +190,13 @@ def compute_dataset_bias_signals(
 # ---------- post-training scan (feature-importance) -------------------------
 
 
-def prescan_feature_importance(metrics_report: Dict[str, Any]) -> Dict[str, Any]:
+def prescan_feature_importance(metrics_report: Dict[str, Any], source: str = "post_training") -> Dict[str, Any]:
     """Flag demographic + proxy features in each model's top-10."""
     out: Dict[str, Any] = {
         "demographic_flags": [],
         "proxy_flags": [],
         "models_scanned": [],
+        "source": source,
     }
     for model in metrics_report.get("models", []):
         name = model.get("model_name", "unknown")

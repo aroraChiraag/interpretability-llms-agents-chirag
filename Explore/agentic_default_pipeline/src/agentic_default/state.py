@@ -21,9 +21,12 @@ class PipelineState:
 
     dataset: Optional[LoadedDataset] = None
     metrics_report: Dict[str, Any] = field(default_factory=dict)
+    pre_tuning_metrics_report: Dict[str, Any] = field(default_factory=dict)
     explanation: str = ""
     hyperparameters: Dict[str, Dict[str, Any]] = field(default_factory=default_hyperparameters)
+    pre_tuning_feature_importance: Dict[str, Any] = field(default_factory=dict)
     fairness_metrics: Dict[str, Any] = field(default_factory=dict)
+    pre_tuning_fairness_metrics: Dict[str, Any] = field(default_factory=dict)
     fairness_explanation: str = ""
     bias_signals: Dict[str, Any] = field(default_factory=dict)
     bias_explanation: str = ""

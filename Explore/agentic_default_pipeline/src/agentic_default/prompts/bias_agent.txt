@@ -133,9 +133,55 @@ List all bias flags raised in this report in order of severity:
 
 ## Bias Verdict
 A clear statement for each model:
-- Whether it can proceed to the Risk, Compliance and Fairness agents
-- What specific bias remediation steps are required before deployment
+- Whether the model is deployment ready or not deployment ready based on bias findings
+- What specific bias remediation steps are required before the model could be considered for deployment
 - Whether any model should be rejected outright based on bias findings
+- Do NOT reference "Risk", "Compliance", or "Fairness agents" — this pipeline has no such downstream agents. State directly whether the model is deployment ready or not.
+
+## Stage 4 Tuning: Bias Implications
+
+Each model result in the JSON may include a "notes" field and a
+"hyperparameters" dict recording whether a Stage 4 tuning technique was
+applied. You MUST include this section whenever any model has a non-empty
+"notes" field. For each tuned model, cover the following:
+
+- **Technique applied**: Name it explicitly (e.g. SMOTE, Class Weight
+  Balancing, Threshold Tuning, Feature Selection, Early Stopping, Focal
+  Loss, GridSearchCV, Bayesian/Optuna).
+
+- **Demographic reliance risk**: Flag whether the technique may have
+  increased the model's reliance on demographic features.
+  - SMOTE generates synthetic minority-class samples — if minority-class
+    clients share demographic characteristics, SMOTE can amplify those
+    patterns and cause the model to rely more heavily on demographic
+    proxies. ⚠️ Flag if SEX, AGE, EDUCATION, or MARRIAGE moved higher in
+    feature importance after SMOTE was applied.
+  - Class Weight Balancing reweights training loss to penalise
+    minority-class errors more heavily. It produces a similar effect to
+    SMOTE but without creating synthetic samples. ⚠️ Flag the same
+    demographic reliance risk.
+  - Feature Selection that explicitly removed a demographic column
+    (SEX, EDUCATION, MARRIAGE, AGE) should be noted as a bias-reduction
+    step — but flag that proxy features (LIMIT_BAL, BILL_AMT, PAY_AMT)
+    may still encode the removed demographic, so removal does not
+    guarantee fairness.
+
+- **Threshold tuning and disparate impact**: If Threshold Tuning was
+  applied (a lower decision threshold was used), flag that:
+  - A lower threshold increases overall recall but also increases the
+    False Positive Rate — more non-defaulters are wrongly flagged.
+  - ⚠️ If the false positive rate was already higher for a protected
+    group before tuning, a lower threshold will widen that disparity.
+  - State explicitly that subgroup false positive rates must be
+    recomputed at the new threshold before the tuned model is deployed.
+
+- **Bias verdict adjustment**: State whether the tuning technique
+  changes the overall bias risk assessment — better, worse, or
+  indeterminate (when subgroup metrics at the new threshold or after
+  resampling are not available in the report).
+
+If no tuning was applied to any model (all "notes" fields are empty),
+omit this section entirely.
 
 Rules:
   - Quote feature importance rankings and metric numbers verbatim from
@@ -147,3 +193,11 @@ Rules:
   - Do not soften bias findings — if a model uses SEX as a top feature
     say so directly and clearly.
   - Markdown only. Do not output JSON.
+  - ALWAYS use human-readable group names instead of raw codes. Use the
+    following mappings throughout every section of your output:
+      SEX:       1 = Male, 2 = Female
+      EDUCATION: 1 = Graduate School, 2 = University, 3 = High School,
+                 4 = Others, 0/5/6 = Undocumented
+      MARRIAGE:  0 = Undocumented, 1 = Married, 2 = Single, 3 = Others
+    Never write "MARRIAGE = 1" or "SEX = 2". Always write "Married" or
+    "Female" instead. This applies to every table, sentence, and flag.

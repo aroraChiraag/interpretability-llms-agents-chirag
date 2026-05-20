@@ -34,6 +34,52 @@ no-default). Tie it to the class balance reported by the Data Agent.
 2-4 bullet points: class imbalance handling, threshold tuning,
 calibration, fairness audits across SEX/EDUCATION/MARRIAGE, etc.
 
+## Stage 4 tuning analysis
+Each model result in the JSON may include a "notes" field and a
+"hyperparameters" dict that record whether a Stage 4 tuning technique
+was applied. You MUST include this section whenever any model has a
+non-empty "notes" field. Cover the following for each tuned model:
+
+- **Technique applied**: Name the technique explicitly. Recognise and
+  explain the following:
+    - SMOTE — synthetic oversampling to balance the training set
+    - Focal Loss — reweights training examples to focus on hard cases
+    - GridSearchCV — exhaustive hyperparameter search with cross-validation
+    - Bayesian / Optuna — intelligent hyperparameter search
+    - Class Weight Balancing — adjusts loss weights to penalise minority
+      class errors more heavily
+    - Early Stopping — halts training when validation performance stops
+      improving
+    - Threshold Tuning — shifts the probability cut-off used to classify
+      a prediction as a default
+    - Feature Selection — removes one or more demographic features from
+      training to reduce direct or proxy bias
+
+- **Effect on metrics**: If the notes field contains a best_cv_score or
+  the hyperparameters changed, describe what improved or worsened compared
+  to a baseline model trained without tuning. If no baseline is available,
+  state clearly that a before/after comparison is not possible.
+
+- **Plain-language explanation**: Describe in one or two sentences what the
+  technique actually did to the training process, in terms a bootcamp
+  student can understand without prior ML knowledge.
+
+- **Trade-offs introduced**: Note any precision/recall trade-off explicitly.
+  For example: a lower decision threshold increases recall but reduces
+  precision, meaning more customers are flagged as defaulters including
+  some who would not have defaulted. SMOTE may amplify patterns in the
+  minority class including demographic patterns. Class weight balancing
+  produces similar effects to SMOTE but without creating synthetic samples.
+  Early stopping may reduce overfitting but can also leave the model
+  under-fitted if patience is set too low.
+
+- **Recommendation**: Based on the tuned metrics, state whether the tuning
+  helped, hurt, or produced a mixed result, and suggest whether the tuned
+  model or the baseline should be preferred for deployment.
+
+If no tuning was applied to any model (all "notes" fields are empty),
+omit this section entirely.
+
 Rules:
   - Quote numbers verbatim from the JSON. Do not invent values.
   - Be honest about weaknesses; do not oversell the best model.

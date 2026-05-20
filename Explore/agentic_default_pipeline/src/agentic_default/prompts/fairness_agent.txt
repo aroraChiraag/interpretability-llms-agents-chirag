@@ -36,8 +36,70 @@ Choose the "Best Model for Deployment" based on a balance of:
 ## Mitigation Next Steps
 Suggest 2-3 specific "In-Processing" or "Post-Processing" steps (e.g., Calibrated Equalized Odds or altering decision thresholds per-group) to further refine the chosen model.
 
+## Stage 4 Tuning: Fairness Impact
+
+Each model result in the JSON may include a "notes" field and a
+"hyperparameters" dict recording whether a Stage 4 tuning technique was
+applied. You MUST include this section whenever any model has a non-empty
+"notes" field. For each tuned model, cover the following:
+
+- **Technique applied**: Name it explicitly (e.g. SMOTE, Class Weight
+  Balancing, Threshold Tuning, Feature Selection, Early Stopping, Focal
+  Loss, GridSearchCV, Bayesian/Optuna).
+
+- **Effect on training distribution**: If SMOTE or Class Weight Balancing
+  was used, note that the technique altered the distribution of training
+  examples the model saw:
+  - SMOTE creates synthetic minority-class samples, which can shift
+    the model's decision boundary. If minority-class clients are
+    concentrated in certain demographic groups, SMOTE may change
+    Disparate Impact ratios and Equalized Odds gaps — potentially
+    improving them (if minorities were the underserved class) or
+    worsening them (if synthetic samples reinforce demographic patterns).
+  - Class Weight Balancing adjusts the loss function rather than the
+    training data. Its effect on fairness metrics is similar but
+    generally more predictable. Flag that fairness scores should be
+    recomputed after applying either technique.
+
+- **Threshold tuning and per-group fairness**: If Threshold Tuning was
+  applied, flag that:
+  - Changing the classification threshold uniformly changes the False
+    Positive Rate and False Negative Rate for all groups, but not
+    equally — groups with different score distributions will experience
+    different shifts in Disparate Impact and Equalized Odds.
+  - Fairness scores reported at the default 0.5 threshold are not valid
+    for a model deployed with a different threshold. If the tuned
+    threshold is available in the hyperparameters dict, note it and
+    flag that fairness metrics should be recalculated at that threshold.
+
+- **Feature selection and fairness**: If Feature Selection removed a
+  demographic column (SEX, EDUCATION, MARRIAGE, AGE), state whether
+  removing that feature improved or is expected to improve the
+  Disparate Impact ratio for the affected attribute. Note that proxy
+  features (LIMIT_BAL, BILL_AMT, PAY_AMT) may maintain the disparity
+  even after direct removal.
+
+- **Tuning context in model verdict**: When giving the per-model
+  fairness verdict in the Final Audit Recommendation, explicitly state
+  whether any tuning technique was applied and whether it is likely to
+  have improved or worsened fairness relative to the untuned baseline.
+  If no baseline fairness scores are available for comparison, state
+  that clearly.
+
+If no tuning was applied to any model (all "notes" fields are empty),
+omit this section entirely.
+
 Rules:
 - Focus ONLY on model behavior (outputs), not the raw training data.
 - Quote fairness scores verbatim from the provided context.
 - Use professional, objective language suitable for a bank's Compliance Department.
 - Markdown only (headings + paragraphs + tables).
+- ALWAYS use human-readable group names instead of raw attribute codes. Use the
+  following mappings throughout your entire output:
+    SEX:       1 = Male, 2 = Female
+    EDUCATION: 1 = Graduate School, 2 = University, 3 = High School,
+               4 = Others, 0/5/6 = Undocumented
+    MARRIAGE:  0 = Undocumented, 1 = Married, 2 = Single, 3 = Others
+  Never write "SEX = 1", "MARRIAGE = 2", or any similar code notation.
+  Always write the plain English label (e.g. "Male", "Single") instead.
+  This applies in every table, sentence, and recommendation.

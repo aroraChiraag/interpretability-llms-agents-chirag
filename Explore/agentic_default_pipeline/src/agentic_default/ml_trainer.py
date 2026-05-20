@@ -169,17 +169,23 @@ def _build_xgboost(random_state: int, params: Dict[str, Any]):
 
 
 def _build_neural_network(random_state: int, params: Dict[str, Any]) -> MLPClassifier:
-    """Construct an MLP using the supplied hyperparameters."""
-    # hidden_layer_sizes can come in as a list (JSON-friendly) — sklearn
-    # accepts a tuple or a list, but normalise for cleanliness.
+    """Construct an MLP using the supplied hyperparameters.
+
+    ``early_stopping`` and ``validation_fraction`` default to True / 0.1 but
+    are only injected when not already present in *params*, so callers (e.g.
+    the early-stopping tuning technique) can override them without triggering
+    "MLPClassifier() got multiple values for keyword argument 'early_stopping'".
+    """
+    # Work on a copy so we never mutate the caller's dict.
+    params = dict(params)
     if "hidden_layer_sizes" in params and isinstance(params["hidden_layer_sizes"], list):
-        params = dict(params)
         params["hidden_layer_sizes"] = tuple(params["hidden_layer_sizes"])
+    # Inject defaults only when the caller hasn't already supplied them.
+    params.setdefault("early_stopping", True)
+    params.setdefault("validation_fraction", 0.1)
     return MLPClassifier(
         activation="relu",
         solver="adam",
-        early_stopping=True,
-        validation_fraction=0.1,
         random_state=random_state,
         verbose=False,
         **params,
